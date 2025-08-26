@@ -1,6 +1,7 @@
 # streamlit_app.py
 import streamlit as st
 import requests
+import os
 
 st.set_page_config(
     page_title="Geo-Regulation Compliance",
@@ -37,7 +38,9 @@ if check_button:
                 "description": description
             }
             try:
-                response = requests.post("http://127.0.0.1:8000/check_compliance", json=payload)
+                # Use environment variable for API URL, fallback to localhost for development
+                api_base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+                response = requests.post(f"{api_base_url}/check_compliance", json=payload)
                 data = response.json()
                 
                 # Display compliance flag
