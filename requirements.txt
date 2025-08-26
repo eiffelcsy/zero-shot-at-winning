@@ -23,3 +23,12 @@ requests
 # Utilities
 pyyaml
 numpy
+
+# PDF Processing
+PyPDF2
+reportlab
+
+# Testing
+pytest
+pytest-mock
+pytest-asyncio
