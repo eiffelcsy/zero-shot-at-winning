@@ -6,7 +6,7 @@ class TestTextChunker:
     
     def test_chunk_text(self, sample_text):
         """Test splitting text into fixed-size chunks with overlap."""
-        from app.text_chunker import TextChunker
+        from rag.ingestion.text_chunker import TextChunker
         
         chunker = TextChunker(chunk_size=100, overlap=20)
         chunks = chunker.chunk_text(sample_text)
@@ -18,7 +18,7 @@ class TestTextChunker:
     
     def test_chunk_preserves_source(self, sample_text):
         """Test that chunks remember their source document."""
-        from app.text_chunker import TextChunker
+        from rag.ingestion.text_chunker import TextChunker
         
         chunker = TextChunker(chunk_size=100, overlap=20)
         source_id = "test_document.pdf"
@@ -30,7 +30,7 @@ class TestTextChunker:
     
     def test_empty_text_chunking(self):
         """Test chunking empty or whitespace-only text."""
-        from app.text_chunker import TextChunker
+        from rag.ingestion.text_chunker import TextChunker
         
         chunker = TextChunker(chunk_size=100, overlap=20)
         
@@ -42,7 +42,7 @@ class TestTextChunker:
     
     def test_chunk_overlap(self):
         """Test that chunks have proper overlap."""
-        from app.text_chunker import TextChunker
+        from rag.ingestion.text_chunker import TextChunker
         
         text = "A" * 200  # Simple repeated text
         chunker = TextChunker(chunk_size=100, overlap=20)
