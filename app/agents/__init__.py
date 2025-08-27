@@ -1,24 +1,27 @@
+"""
+Multi-agent compliance analysis system
+"""
+
 import logging
 
+# Configure logging for all agents
 logging.getLogger("agent").setLevel(logging.INFO)
 
+# Import base class and implemented agents
 from .base import BaseComplianceAgent
 from .screening import ScreeningAgent
-from .orchestrator import ComplianceOrchestrator
 
-# When research/validation agents are ready:
+# Will add more as you implement them:
 # from .research import ResearchAgent
 # from .validation import ValidationAgent
-# from .learning import LearningAgent
+# from .orchestrator import ComplianceOrchestrator
 
-# Public APIs
 __all__ = [
     "BaseComplianceAgent",
     "ScreeningAgent",
-    "ComplianceOrchestrator",
 ]
 
-# Package constants (edit later)
+# Package constants
 CONFIDENCE_THRESHOLD = 0.7
 SUPPORTED_REGULATIONS = [
     "GDPR",
