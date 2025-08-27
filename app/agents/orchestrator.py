@@ -1,83 +1,93 @@
-from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, START, END
-from .screening import LangGraphScreeningAgent
 from .state import ComplianceState
+from .screening import ScreeningAgent
+from .research1 import ResearchAgent
+from .validation import ValidationAgent
+from typing import Dict, Any
 import uuid
 from datetime import datetime
 
-class ComplianceWorkflow:
-    def __init__(self):
-        self.screening_agent = LangGraphScreeningAgent()
-        # TODO: Add research and validation agents
+class ComplianceOrchestrator:
+    """LangGraph-powered multi-agent orchestrator with direct agent integration"""
+    
+    def __init__(self, kb_dir: str = "data/kb"):
+        # Initialize agents directly
+        self.screening_agent = ScreeningAgent()
+        self.research_agent = ResearchAgent(kb_dir=kb_dir)
+        self.validation_agent = ValidationAgent()
         
-        # Build the workflow graph
+        # Build workflow
         self.workflow = self._build_workflow()
     
     def _build_workflow(self) -> StateGraph:
-        # Create the graph
+        """Build the LangGraph workflow"""
         workflow = StateGraph(ComplianceState)
         
-        # Add nodes
-        workflow.add_node("screening", self._screening_node)
-        # TODO: Add research and validation nodes
+        # Add nodes - agents handle LangGraph state directly
+        workflow.add_node("screening", self.screening_agent.process)
+        workflow.add_node("research", self.research_agent.process)
+        workflow.add_node("validation", self.validation_agent.process)
         
         # Define flow
         workflow.add_edge(START, "screening")
         
-        # Conditional edges based on screening result
+        # Conditional routing after screening
         workflow.add_conditional_edges(
             "screening",
             self._route_after_screening,
             {
-                "research": "research",  # Will add later
-                "validation": "validation",  # Will add later
-                "complete": END
+                "research": "research",
+                "validation": "validation",
+                "end": END
             }
         )
         
+        workflow.add_edge("research", "validation")
+        workflow.add_edge("validation", END)
+        
         return workflow.compile()
-    
-    async def _screening_node(self, state: ComplianceState) -> ComplianceState:
-        """Screening node for LangGraph"""
-        # Add session metadata
-        if not state.get("session_id"):
-            state["session_id"] = f"compliance_{uuid.uuid4().hex[:8]}"
-        
-        if not state.get("workflow_started"):
-            state["workflow_started"] = datetime.now().isoformat()
-        
-        # Run screening agent
-        screening_updates = await self.screening_agent.process(state)
-        
-        # Merge updates into state
-        return {**state, **screening_updates}
     
     def _route_after_screening(self, state: ComplianceState) -> str:
         """Determine next step after screening"""
-        screening_result = state.get("screening_result", {})
+        screening_analysis = state.get("screening_analysis", {})
         
-        if screening_result.get("error"):
-            return "complete"  # End on error
+        # End on error
+        if screening_analysis.get("error"):
+            return "end"
         
-        if screening_result.get("needs_research", True):
+        # Route based on research need
+        if screening_analysis.get("needs_research", True):
             return "research"
         else:
             return "validation"
     
     async def analyze_feature(self, feature_name: str, feature_description: str) -> Dict[str, Any]:
-        """Main entry point"""
+        """Main entry point for feature analysis"""
+        
+        # Create initial state
         initial_state = ComplianceState(
             feature_name=feature_name,
-            feature_description=feature_description
+            feature_description=feature_description,
+            session_id=f"compliance_{uuid.uuid4().hex[:8]}",
+            workflow_started=datetime.now().isoformat()
         )
         
         # Execute workflow
         final_state = await self.workflow.ainvoke(initial_state)
         
-        # Extract final result
+        # Extract and format final result
+        final_decision = final_state.get("final_decision", {})
+        screening_analysis = final_state.get("screening_analysis", {})
+        
         return {
             "session_id": final_state.get("session_id"),
             "feature_name": feature_name,
-            "screening_result": final_state.get("screening_result"),
-            "workflow_completed": datetime.now().isoformat()
+            "needs_geo_logic": final_decision.get("needs_geo_logic", "UNKNOWN"),
+            "reasoning": final_decision.get("reasoning", ""),
+            "related_regulations": final_decision.get("related_regulations", []),
+            "confidence_score": final_decision.get("confidence", 0.0),
+            "risk_level": screening_analysis.get("risk_level", "UNKNOWN"),
+            "workflow_completed": final_state.get("workflow_completed"),
+            "agents_used": ["screening", "research", "validation"],
+            "evidence_sources": len(final_state.get("research_evidence", []))
         }
