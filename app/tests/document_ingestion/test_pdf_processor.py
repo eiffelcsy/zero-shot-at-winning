@@ -45,14 +45,10 @@ class TestPDFProcessor:
         
         assert "filename" in metadata
         assert "date_processed" in metadata
-        assert "file_size" in metadata
-        assert "source_type" in metadata
         assert "content_type" in metadata
         assert metadata["filename"] == "sample_document.pdf"
-        assert metadata["source_type"] == "upload"
         assert metadata["content_type"] == "application/pdf"
         assert isinstance(metadata["date_processed"], datetime)
-        assert metadata["file_size"] > 0
     
     def test_extract_pdf_specific_metadata(self, sample_pdf_upload):
         """Test extraction of PDF-specific metadata."""

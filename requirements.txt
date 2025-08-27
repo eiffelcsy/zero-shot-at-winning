@@ -4,6 +4,7 @@ uvicorn[standard]
 pydantic
 python-dotenv
 streamlit
+python-multipart
 
 # Vector Database and RAG
 chromadb

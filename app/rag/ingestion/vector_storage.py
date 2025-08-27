@@ -33,6 +33,45 @@ class VectorStorage:
         
         logger.info(f"Initialized VectorStorage with model {embedding_model} and collection {collection_name}")
     
+    def _sanitize_metadata_for_chromadb(self, metadatas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Sanitize metadata to ensure ChromaDB compatibility.
+        
+        ChromaDB only accepts str, int, float, bool, or None as metadata values.
+        This method converts or removes incompatible types.
+        
+        Args:
+            metadatas: List of metadata dictionaries
+            
+        Returns:
+            List of sanitized metadata dictionaries
+        """        
+        sanitized_metadatas = []
+        
+        for i, metadata in enumerate(metadatas):
+            sanitized_metadata = {}
+            
+            for key, value in metadata.items():
+                if value is None:
+                    # Remove None values as they can cause JSON deserialization issues
+                    continue
+                elif isinstance(value, (str, int, float, bool)):
+                    # Already valid types
+                    sanitized_metadata[key] = value
+                else:
+                    # Convert other types to string
+                    try:
+                        sanitized_value = str(value)
+                        sanitized_metadata[key] = sanitized_value
+                    except Exception as e:
+                        logger.warning(f"Failed to convert metadata value for key '{key}': {e}")
+                        # Skip this metadata entry if conversion fails
+                        continue
+            
+            sanitized_metadatas.append(sanitized_metadata)
+        
+        return sanitized_metadatas
+    
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
         Generate embeddings for a list of texts using OpenAI embedding model.
@@ -61,15 +100,17 @@ class VectorStorage:
         self, 
         chunks: List[Union[ChunkWithMetadata, Dict[str, Any], str]], 
         embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+        batch_size: int = 300
     ) -> List[str]:
         """
-        Store text chunks with their embeddings in ChromaDB.
+        Store text chunks with their embeddings in ChromaDB in batches.
         
         Args:
             chunks: List of text chunks (can be ChunkWithMetadata objects, dicts, or strings)
             embeddings: Optional pre-computed embeddings. If None, will generate them
             metadatas: Optional metadata for each chunk. If None, will extract from chunks
+            batch_size: Number of records to send to ChromaDB per batch (default: 300)
             
         Returns:
             List of document IDs that were stored
@@ -100,9 +141,19 @@ class VectorStorage:
             # Use provided metadatas or extracted ones
             final_metadatas = metadatas if metadatas is not None else extracted_metadatas
             
+            # Sanitize metadata for ChromaDB compatibility
+            final_metadatas = self._sanitize_metadata_for_chromadb(final_metadatas)
+            
+            invalid_types_found = {}
+            for i, metadata in enumerate(final_metadatas):
+                for key, value in metadata.items():
+                    value_type = type(value).__name__
+                    if value_type not in ['str', 'int', 'float', 'bool', 'NoneType']:
+                        if key not in invalid_types_found:
+                            invalid_types_found[key] = value_type
+            
             # Generate embeddings if not provided
             if embeddings is None:
-                logger.info("No embeddings provided, generating them")
                 embeddings = self.generate_embeddings(texts)
             
             # Validate dimensions match
@@ -112,76 +163,56 @@ class VectorStorage:
             # Generate unique IDs for each chunk
             document_ids = [str(uuid.uuid4()) for _ in range(len(texts))]
             
-            # Store in ChromaDB
-            self.collection.add(
-                documents=texts,
-                embeddings=embeddings,
-                metadatas=final_metadatas,
-                ids=document_ids
-            )
+            # Store in ChromaDB using batching
+            all_stored_ids = []
+            total_chunks = len(texts)
             
-            logger.info(f"Successfully stored {len(texts)} chunks in ChromaDB")
-            return document_ids
+            if total_chunks <= batch_size:
+                # No need for batching
+                self.collection.add(
+                    documents=texts,
+                    embeddings=embeddings,
+                    metadatas=final_metadatas,
+                    ids=document_ids
+                )
+                all_stored_ids = document_ids
+                logger.info(f"Stored {total_chunks} chunks in single batch")
+            else:
+                # Process in batches
+                num_batches = (total_chunks + batch_size - 1) // batch_size  # Ceiling division
+                logger.info(f"Storing {total_chunks} chunks in {num_batches} batches of {batch_size}")
+                
+                for batch_idx in range(num_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, total_chunks)
+                    
+                    batch_texts = texts[start_idx:end_idx]
+                    batch_embeddings = embeddings[start_idx:end_idx]
+                    batch_metadatas = final_metadatas[start_idx:end_idx]
+                    batch_ids = document_ids[start_idx:end_idx]
+                    
+                    try:
+                        self.collection.add(
+                            documents=batch_texts,
+                            embeddings=batch_embeddings,
+                            metadatas=batch_metadatas,
+                            ids=batch_ids
+                        )
+                        all_stored_ids.extend(batch_ids)
+                        logger.info(f"Successfully stored batch {batch_idx + 1}/{num_batches} "
+                                  f"({len(batch_texts)} chunks)")
+                        
+                    except Exception as batch_error:
+                        logger.error(f"Failed to store batch {batch_idx + 1}/{num_batches}: {batch_error}")
+                        # Continue with next batch instead of failing completely
+                        continue
+            
+            logger.info(f"Successfully stored {len(all_stored_ids)} chunks total")
+            return all_stored_ids
             
         except Exception as e:
             logger.error(f"Failed to store chunks: {e}")
             raise ValueError(f"Chunk storage failed: {e}")
-    
-    def search_similar(
-        self, 
-        query: str, 
-        n_results: int = 5,
-        where: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for similar chunks using semantic similarity.
-        
-        Args:
-            query: Search query text
-            n_results: Number of results to return
-            where: Optional metadata filter
-            
-        Returns:
-            List of dictionaries containing document, distance, and metadata
-        """
-        try:
-            logger.info(f"Searching for similar chunks with query: '{query[:50]}...'")
-            
-            # Generate embedding for the query
-            query_embedding = self.embeddings.embed_query(query)
-            
-            # Search in ChromaDB
-            search_kwargs = {
-                'query_embeddings': [query_embedding],
-                'n_results': n_results
-            }
-            
-            if where:
-                search_kwargs['where'] = where
-            
-            results = self.collection.query(**search_kwargs)
-            
-            # Format results
-            formatted_results = []
-            if results['documents'] and results['documents'][0]:
-                for i, (doc, distance, metadata) in enumerate(zip(
-                    results['documents'][0],
-                    results['distances'][0],
-                    results['metadatas'][0]
-                )):
-                    formatted_results.append({
-                        'document': doc,
-                        'distance': distance,
-                        'metadata': metadata,
-                        'rank': i + 1
-                    })
-            
-            logger.info(f"Found {len(formatted_results)} similar chunks")
-            return formatted_results
-            
-        except Exception as e:
-            logger.error(f"Failed to search similar chunks: {e}")
-            raise ValueError(f"Similarity search failed: {e}")
     
     def get_collection_stats(self) -> Dict[str, Any]:
         """
@@ -223,10 +254,8 @@ class VectorStorage:
             if results['ids']:
                 self.collection.delete(ids=results['ids'])
                 deleted_count = len(results['ids'])
-                logger.info(f"Deleted {deleted_count} documents matching filter: {where}")
                 return deleted_count
             else:
-                logger.info(f"No documents found matching filter: {where}")
                 return 0
                 
         except Exception as e:

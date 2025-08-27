@@ -21,7 +21,7 @@ class PDFProcessor:
     def __init__(self):
         """Initialize the PDF processor."""
         self.supported_extensions = {'.pdf'}
-        self.max_file_size = 1024 * 1024 * 1024  # 1GB default limit
+        self.max_file_size = 200 * 1024 * 1024  # 200MB default limit
     
     def load_pdf(self, upload_file: UploadFile) -> str:
         """
@@ -143,13 +143,8 @@ class PDFProcessor:
         
         metadata = {
             'filename': upload_file.filename or 'uploaded_file.pdf',
-            'file_path': None,  # No file path for uploads
-            'file_size': len(file_content),
-            'date_processed': datetime.now(),
-            'date_modified': None,  # Not available for uploads
-            'date_created': None,   # Not available for uploads
-            'source_type': 'upload',
-            'content_type': upload_file.content_type
+            'date_processed': datetime.now().isoformat(),
+            'content_type': upload_file.content_type or 'application/pdf'
         }
         
         # Extract PDF-specific metadata using temporary file
@@ -186,14 +181,13 @@ class PDFProcessor:
         # Document information if available
         if pdf_reader.metadata:
             pdf_info = pdf_reader.metadata
+            # Convert PyPDF TextStringObject types to regular strings for ChromaDB compatibility
             metadata.update({
-                'title': pdf_info.get('/Title', ''),
-                'author': pdf_info.get('/Author', ''),
-                'subject': pdf_info.get('/Subject', ''),
-                'creator': pdf_info.get('/Creator', ''),
-                'producer': pdf_info.get('/Producer', ''),
-                'creation_date': pdf_info.get('/CreationDate', ''),
-                'modification_date': pdf_info.get('/ModDate', ''),
+                'title': str(pdf_info.get('/Title', '')) if pdf_info.get('/Title') else '',
+                'author': str(pdf_info.get('/Author', '')) if pdf_info.get('/Author') else '',
+                'subject': str(pdf_info.get('/Subject', '')) if pdf_info.get('/Subject') else '',
+                'creator': str(pdf_info.get('/Creator', '')) if pdf_info.get('/Creator') else '',
+                'producer': str(pdf_info.get('/Producer', '')) if pdf_info.get('/Producer') else '',
             })
     
 
@@ -218,7 +212,7 @@ class PDFProcessor:
         # Add validation status
         validation_result = {
             'is_valid': True,
-            'validation_timestamp': datetime.now(),
+            'validation_timestamp': datetime.now().isoformat(),  # Convert to string for ChromaDB compatibility
             'file_metadata': metadata,
         }
         
@@ -258,7 +252,7 @@ class PDFProcessor:
                 'metadata': metadata,
                 'validation_result': {
                     'is_valid': True,
-                    'validation_timestamp': datetime.now(),
+                    'validation_timestamp': datetime.now().isoformat(),  # Convert to string for ChromaDB compatibility
                     'text_length': len(extracted_text),
                     'processing_status': 'success'
                 }

@@ -60,12 +60,27 @@ def check_compliance(feature_title: str, feature_description: str):
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-def upload_regulation_file(uploaded_file):
+def upload_regulation_files_batch(uploaded_files):
+    """New batch upload function using the enhanced PDF processing pipeline."""
     try:
         api_base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-        response = requests.post(f"{api_base_url}/upload_regulation", files=files, timeout=60)
+        
+        # Prepare files for batch upload
+        files = []
+        for uploaded_file in uploaded_files:
+            files.append(("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")))
+        
+        response = requests.post(f"{api_base_url}/api/v1/upload-pdfs", files=files, timeout=120)
         return response
+    except Exception as e:
+        return None
+
+def get_upload_stats():
+    """Get statistics about the PDF upload pipeline."""
+    try:
+        api_base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+        response = requests.get(f"{api_base_url}/api/v1/upload-stats", timeout=30)
+        return response.json() if response.status_code == 200 else None
     except Exception as e:
         return None
 
@@ -421,24 +436,116 @@ elif page == "📤 Upload Regulations":
     if uploaded_files:
         st.markdown("### 📋 Upload Status")
         
-        for i, uploaded_file in enumerate(uploaded_files):
-            col1, col2, col3 = st.columns([3, 1, 1])
+        # Display files to be uploaded
+        for uploaded_file in uploaded_files:
+            col1, col2 = st.columns([4, 1])
             
             with col1:
                 st.write(f"📄 **{uploaded_file.name}** ({uploaded_file.size:,} bytes)")
             
             with col2:
-                if st.button(f"Upload", key=f"upload_{i}", use_container_width=True):
-                    with st.spinner(f"Processing {uploaded_file.name}..."):
-                        response = upload_regulation_file(uploaded_file)
+                st.write("🔄 Ready")
+        
+        # Batch upload controls
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            if st.button("🚀 Upload All Files", use_container_width=True, type="primary"):
+                with st.spinner(f"Processing {len(uploaded_files)} PDF files through the ingestion pipeline..."):
+                    try:
+                        # Use the new batch upload function
+                        response = upload_regulation_files_batch(uploaded_files)
                         
                         if response and response.status_code == 200:
-                            st.success("✅ Uploaded!")
+                            result = response.json()
+                            
+                            # Display detailed results
+                            st.markdown("### 📊 Upload Results")
+                            
+                            # Summary statistics
+                            total_files = result.get('total_files', 0)
+                            successful = result.get('successful', 0)
+                            failed = result.get('failed', 0)
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Files", total_files)
+                            with col2:
+                                st.metric("✅ Successful", successful)
+                            with col3:
+                                st.metric("❌ Failed", failed)
+                            
+                            # Overall status
+                            status = result.get('status', 'unknown')
+                            if status == 'success':
+                                st.success(f"🎉 {result.get('message', 'All files processed successfully!')}")
+                            elif status == 'partial_success':
+                                st.warning(f"⚠️ {result.get('message', 'Some files processed successfully')}")
+                            else:
+                                st.error(f"❌ {result.get('message', 'Processing failed')}")
+                            
+                            # Detailed results for each file
+                            if result.get('results'):
+                                st.markdown("#### 📋 Detailed Results")
+                                
+                                for file_result in result['results']:
+                                    filename = file_result.get('filename', 'Unknown file')
+                                    file_status = file_result.get('status', 'unknown')
+                                    chunks_processed = file_result.get('chunks_processed', 0)
+                                    
+                                    if file_status == 'success':
+                                        st.success(f"✅ **{filename}**: {chunks_processed} chunks processed")
+                                    else:
+                                        error_msg = file_result.get('error', 'Unknown error')
+                                        st.error(f"❌ **{filename}**: {error_msg}")
+                        
                         else:
-                            st.error("❌ Failed")
-            
-            with col3:
-                st.write("⏳ Pending")
+                            error_msg = "Failed to upload files"
+                            if response:
+                                try:
+                                    error_data = response.json()
+                                    error_msg = error_data.get('detail', error_msg)
+                                except:
+                                    error_msg = f"HTTP {response.status_code}: {response.text}"
+                            
+                            st.error(f"❌ Upload failed: {error_msg}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Upload error: {str(e)}")
+        
+        # Pipeline statistics
+        st.markdown("---")
+        if st.button("📊 View Pipeline Statistics", use_container_width=False):
+            with st.spinner("Loading pipeline statistics..."):
+                stats = get_upload_stats()
+                if stats:
+                    st.markdown("#### 🔧 Pipeline Configuration")
+                    config = stats.get('pipeline_config', {})
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Chunk Size", config.get('chunk_size', 'Unknown'))
+                    with col2:
+                        st.metric("Chunk Overlap", config.get('chunk_overlap', 'Unknown'))
+                    with col3:
+                        st.metric("Embedding Model", config.get('embedding_model', 'Unknown'))
+                    with col4:
+                        st.metric("Collection", config.get('collection_name', 'Unknown'))
+                    
+                    # Storage statistics
+                    st.markdown("#### 💾 Storage Statistics")
+                    storage_stats = stats.get('storage_stats', {})
+                    if 'error' not in storage_stats:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Total Documents", storage_stats.get('document_count', 'Unknown'))
+                        with col2:
+                            st.metric("Collection Status", storage_stats.get('status', 'Unknown'))
+                    else:
+                        st.error(f"Storage stats error: {storage_stats.get('error')}")
+                else:
+                    st.error("Failed to load pipeline statistics")
     
     # Supported regulations info
     st.markdown("---")

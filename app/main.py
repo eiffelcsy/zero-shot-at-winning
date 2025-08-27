@@ -1,23 +1,37 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from chroma.chroma_connection import get_chroma_collection
 from pydantic import BaseModel
 from typing import Optional
+
+# Import the PDF upload router
+from api.v1.router import router as pdf_router
 
 class RequestBody(BaseModel):
     ids: list[str]
     documents: list[str]
     metadatas: list[dict]
 
-app = FastAPI(title="ChromaDB FastAPI Integration")
+app = FastAPI(
+    title="TikTok Geo-Compliance System API",
+    description="FastAPI backend for PDF document ingestion and compliance analysis",
+    version="1.0.0"
+)
 
-@app.post("/api/documents/")
-async def add_documents(request: RequestBody, col=Depends(get_chroma_collection)):
-    try:
-        col.add(
-            ids=request.ids,
-            documents=request.documents,
-            metadatas=request.metadatas
-        )
-        return {"message": "Documents added successfully", "ids": request.ids}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# Add CORS middleware to allow Streamlit frontend to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],  # Streamlit default ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include the PDF upload router
+app.include_router(pdf_router)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify API is running."""
+    return {"status": "healthy", "message": "TikTok Geo-Compliance System API is running"}

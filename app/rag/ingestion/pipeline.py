@@ -25,7 +25,8 @@ class PDFIngestionPipeline:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embedding_model: str = "text-embedding-3-large",
-        collection_name: str = "rag_collection"
+        collection_name: str = "rag_collection",
+        batch_size: int = 300
     ):
         """
         Initialize the PDF ingestion pipeline.
@@ -35,6 +36,7 @@ class PDFIngestionPipeline:
             chunk_overlap: Overlap between consecutive chunks
             embedding_model: OpenAI embedding model to use
             collection_name: ChromaDB collection name
+            batch_size: Number of chunks to store in ChromaDB per batch
         """
         self.pdf_processor = PDFProcessor()
         self.text_chunker = TextChunker(chunk_size=chunk_size, overlap=chunk_overlap)
@@ -42,9 +44,10 @@ class PDFIngestionPipeline:
             embedding_model=embedding_model,
             collection_name=collection_name
         )
+        self.batch_size = batch_size
         
         logger.info(f"Initialized PDFIngestionPipeline with chunk_size={chunk_size}, "
-                   f"overlap={chunk_overlap}, model={embedding_model}")
+                   f"overlap={chunk_overlap}, model={embedding_model}, batch_size={batch_size}")
     
     def process_pdf(self, pdf_file: UploadFile) -> Dict[str, Any]:
         """
@@ -90,11 +93,12 @@ class PDFIngestionPipeline:
                 }
                 chunk_metadatas.append(chunk_metadata)
             
-            # Step 4: Store chunks with embeddings
+            # Step 4: Store chunks with embeddings in batches
             document_ids = self.vector_storage.store_chunks(
                 chunks=chunks,
                 embeddings=embeddings,
-                metadatas=chunk_metadatas
+                metadatas=chunk_metadatas,
+                batch_size=self.batch_size
             )
             
             # Create success result
@@ -207,7 +211,8 @@ class PDFIngestionPipeline:
                     'chunk_size': self.text_chunker.chunk_size,
                     'chunk_overlap': self.text_chunker.overlap,
                     'embedding_model': self.vector_storage.embedding_model,
-                    'collection_name': self.vector_storage.collection_name
+                    'collection_name': self.vector_storage.collection_name,
+                    'batch_size': self.batch_size
                 },
                 'storage_stats': collection_stats,
                 'status': 'operational'
@@ -219,7 +224,8 @@ class PDFIngestionPipeline:
                     'chunk_size': self.text_chunker.chunk_size,
                     'chunk_overlap': self.text_chunker.overlap,
                     'embedding_model': self.vector_storage.embedding_model,
-                    'collection_name': self.vector_storage.collection_name
+                    'collection_name': self.vector_storage.collection_name,
+                    'batch_size': self.batch_size
                 },
                 'storage_stats': {'error': str(e)},
                 'status': 'error'
