@@ -1,106 +1,83 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
+from langgraph.graph import StateGraph, START, END
+from .screening import LangGraphScreeningAgent
+from .state import ComplianceState
+import uuid
 from datetime import datetime
-import asyncio
-from .screening import ScreeningAgent
 
-class ComplianceOrchestrator:
-    """Orchestrates the multi-agent compliance analysis workflow"""
+class ComplianceWorkflow:
+    def __init__(self):
+        self.screening_agent = LangGraphScreeningAgent()
+        # TODO: Add research and validation agents
+        
+        # Build the workflow graph
+        self.workflow = self._build_workflow()
     
-    def __init__(self, screening_agent: ScreeningAgent, research_agent=None, validation_agent=None):
-        self.screening_agent = screening_agent
-        self.research_agent = research_agent
-        self.validation_agent = validation_agent
+    def _build_workflow(self) -> StateGraph:
+        # Create the graph
+        workflow = StateGraph(ComplianceState)
         
-        # Workflow state
-        self.analysis_history = []
+        # Add nodes
+        workflow.add_node("screening", self._screening_node)
+        # TODO: Add research and validation nodes
         
-    async def analyze_feature(self, feature_name: str, feature_description: str) -> Dict[str, Any]:
-        """Main entry point for feature compliance analysis"""
+        # Define flow
+        workflow.add_edge(START, "screening")
         
-        analysis_session = {
-            "session_id": f"analysis_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
-            "feature_name": feature_name,
-            "feature_description": feature_description,
-            "started_at": datetime.utcnow(),
-            "agents_used": [],
-            "results": {}
-        }
-        
-        try:
-            # Step 1: Screening
-            screening_input = {
-                "feature_description": feature_description,
-                "feature_name": feature_name
+        # Conditional edges based on screening result
+        workflow.add_conditional_edges(
+            "screening",
+            self._route_after_screening,
+            {
+                "research": "research",  # Will add later
+                "validation": "validation",  # Will add later
+                "complete": END
             }
-            
-            screening_result = await self.screening_agent.process(screening_input)
-            analysis_session["agents_used"].append("screening")
-            analysis_session["results"]["screening"] = screening_result
-            
-            # Step 2: Determine next steps based on screening
-            next_step = screening_result.get("next_step", "validation")
-            
-            if next_step == "research" and self.research_agent:
-                # Add research step when you implement research agent
-                pass
-            elif next_step == "validation" and self.validation_agent:
-                # Add validation step when you implement validation agent  
-                pass
-            
-            # Final assessment
-            final_assessment = self._create_final_assessment(analysis_session)
-            analysis_session["final_assessment"] = final_assessment
-            analysis_session["completed_at"] = datetime.utcnow()
-            
-            # Store for learning
-            self.analysis_history.append(analysis_session)
-            
-            return final_assessment
-            
-        except Exception as e:
-            return self._create_error_assessment(str(e), analysis_session)
+        )
+        
+        return workflow.compile()
     
-    def _create_final_assessment(self, session: Dict) -> Dict[str, Any]:
-        """Create final compliance assessment from agent results"""
+    async def _screening_node(self, state: ComplianceState) -> ComplianceState:
+        """Screening node for LangGraph"""
+        # Add session metadata
+        if not state.get("session_id"):
+            state["session_id"] = f"compliance_{uuid.uuid4().hex[:8]}"
         
-        screening_analysis = session["results"]["screening"]["analysis"]
+        if not state.get("workflow_started"):
+            state["workflow_started"] = datetime.now().isoformat()
         
-        return {
-            "session_id": session["session_id"],
-            "feature_name": session["feature_name"],
-            "compliance_required": screening_analysis.get("compliance_required", False),
-            "risk_level": screening_analysis.get("risk_level", "UNKNOWN"),
-            "confidence_score": screening_analysis.get("confidence", 0.0),
-            "applicable_regulations": [],  # Will be filled by research agent
-            "reasoning": screening_analysis.get("reasoning", ""),
-            "geographic_scope": screening_analysis.get("geographic_scope", ["unknown"]),
-            "age_sensitive": screening_analysis.get("age_sensitivity", False),
-            "human_review_needed": screening_analysis.get("confidence", 0) < 0.7,
-            "agents_consulted": session["agents_used"],
-            "analysis_timestamp": session["started_at"].isoformat()
-        }
+        # Run screening agent
+        screening_updates = await self.screening_agent.process(state)
+        
+        # Merge updates into state
+        return {**state, **screening_updates}
     
-    def _create_error_assessment(self, error: str, session: Dict) -> Dict[str, Any]:
-        """Create error assessment"""
-        return {
-            "session_id": session.get("session_id", "error_session"),
-            "feature_name": session.get("feature_name", "unknown"),
-            "compliance_required": None,
-            "risk_level": "ERROR",
-            "confidence_score": 0.0,
-            "error": error,
-            "human_review_needed": True,
-            "analysis_timestamp": datetime.utcnow().isoformat()
-        }
-
-    async def batch_analyze(self, features: List[Dict]) -> List[Dict]:
-        """Analyze multiple features in batch"""
-        tasks = []
-        for feature in features:
-            task = self.analyze_feature(
-                feature.get("feature_name", ""),
-                feature.get("feature_description", "")
-            )
-            tasks.append(task)
+    def _route_after_screening(self, state: ComplianceState) -> str:
+        """Determine next step after screening"""
+        screening_result = state.get("screening_result", {})
         
-        return await asyncio.gather(*tasks, return_exceptions=True)
+        if screening_result.get("error"):
+            return "complete"  # End on error
+        
+        if screening_result.get("needs_research", True):
+            return "research"
+        else:
+            return "validation"
+    
+    async def analyze_feature(self, feature_name: str, feature_description: str) -> Dict[str, Any]:
+        """Main entry point"""
+        initial_state = ComplianceState(
+            feature_name=feature_name,
+            feature_description=feature_description
+        )
+        
+        # Execute workflow
+        final_state = await self.workflow.ainvoke(initial_state)
+        
+        # Extract final result
+        return {
+            "session_id": final_state.get("session_id"),
+            "feature_name": feature_name,
+            "screening_result": final_state.get("screening_result"),
+            "workflow_completed": datetime.now().isoformat()
+        }
