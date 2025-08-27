@@ -3,7 +3,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field, HttpUrl
 from .base import BaseComplianceAgent
-from .templates import TIKTOK_CONTEXT
+from prompts.templates import TIKTOK_CONTEXT
 from typing import Dict, Any, List, Literal
 from datetime import datetime
 import json
