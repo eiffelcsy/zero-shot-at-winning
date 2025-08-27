@@ -1,4 +1,3 @@
-# app/agents/base.py
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timezone
@@ -17,7 +16,6 @@ except ImportError:
     BaseLanguageModel = Any
     LLM = Any
     BaseChatModel = Any
-
 
 class BaseComplianceAgent(ABC):
     """Base class for all compliance agents in the TikTok geo-regulation system"""
@@ -47,16 +45,17 @@ class BaseComplianceAgent(ABC):
         pass
     
     async def safe_llm_call(self, prompt: str, max_retries: int = 3) -> str:
-        """Safe LLM call with retries and error handling"""
+        """Safe LLM call with retries and error handling - using new LangChain API"""
         for attempt in range(max_retries):
             try:
-                # Handle different LangChain LLM interfaces
-                if hasattr(self.llm, 'apredict'):
-                    return await self.llm.apredict(prompt)
-                elif hasattr(self.llm, 'ainvoke'):
+                # Handle different LangChain LLM interfaces (NEW METHOD FIRST)
+                if hasattr(self.llm, 'ainvoke'):
                     result = await self.llm.ainvoke(prompt)
                     # Handle different return types
                     return result.content if hasattr(result, 'content') else str(result)
+                elif hasattr(self.llm, 'apredict'):
+                    # Fallback for older LangChain versions
+                    return await self.llm.apredict(prompt)
                 elif hasattr(self.llm, 'predict'):
                     # Fallback for sync LLMs
                     return self.llm.predict(prompt)
