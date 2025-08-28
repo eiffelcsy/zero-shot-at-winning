@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
-from .prompts.templates import SCREENING_PROMPT
+from .prompts.templates import build_screening_prompt
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
@@ -22,13 +22,20 @@ class ScreeningOutput(BaseModel):
 class ScreeningAgent(BaseComplianceAgent):
     """First agent - analyzes features for compliance indicators"""
     
-    def __init__(self):
+    def __init__(self, memory_overlay: str = ""):
         super().__init__("ScreeningAgent")
+        self.memory_overlay = memory_overlay
         self.setup_prompts()
     
     def setup_prompts(self):
-        """Setup LangChain prompt and chain"""
-        self.create_chain(SCREENING_PROMPT, ScreeningOutput)
+        """Setup LangChain prompt and chain with dynamic prompt building"""
+        screening_prompt = build_screening_prompt(self.memory_overlay)
+        self.create_chain(screening_prompt, ScreeningOutput)
+    
+    def update_memory(self, new_memory_overlay: str):
+        """Allow runtime updates to the prompt for learning"""
+        self.memory_overlay = new_memory_overlay
+        self.setup_prompts()
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze feature for compliance risk"""
@@ -46,7 +53,6 @@ class ScreeningAgent(BaseComplianceAgent):
             
             # Run LLM analysis
             result = await self.safe_llm_call({
-                "feature_name": feature_name,
                 "feature_description": feature_description,
                 "context_documents": context_docs_str
             })
@@ -84,36 +90,6 @@ class ScreeningAgent(BaseComplianceAgent):
                 "screening_completed": True,
                 "next_step": "validation"  # Skip to validation on error
             }
-    
-    def _format_context_documents(self, context_documents: Any) -> str:
-        """Format context documents for the prompt"""
-        if not context_documents:
-            return "No additional context documents provided."
-        
-        if isinstance(context_documents, str):
-            return context_documents
-        
-        if isinstance(context_documents, list):
-            formatted_docs = []
-            for i, doc in enumerate(context_documents, 1):
-                if isinstance(doc, dict):
-                    # If document is a dictionary with metadata
-                    title = doc.get("title", f"Document {i}")
-                    content = doc.get("content", str(doc))
-                    formatted_docs.append(f"**{title}**:\n{content}")
-                else:
-                    # If document is just text
-                    formatted_docs.append(f"**Document {i}**:\n{str(doc)}")
-            return "\n\n".join(formatted_docs)
-        
-        if isinstance(context_documents, dict):
-            formatted_docs = []
-            for key, value in context_documents.items():
-                formatted_docs.append(f"**{key}**:\n{str(value)}")
-            return "\n\n".join(formatted_docs)
-        
-        # Fallback: convert to string
-        return str(context_documents)
     
     def _enhance_result(self, result: Dict, original_state: Dict) -> Dict:
         """Add metadata and validation to screening result"""
