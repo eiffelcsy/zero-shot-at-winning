@@ -37,6 +37,6 @@ def get_chroma_collection(client: ClientAPI = Depends(get_chroma_client)) -> Col
     global _collection
     if _collection is None:
         _collection = client.get_or_create_collection(
-            name="rag_collection",
+            name="regulation_kb",
         )
     return _collection

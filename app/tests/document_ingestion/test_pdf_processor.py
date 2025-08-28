@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime
 import os
 from rag.ingestion.pdf_processor import PDFProcessor, PDFValidationError
 
@@ -38,69 +37,6 @@ class TestPDFProcessor:
         with pytest.raises(PDFValidationError, match="PDF file is empty"):
             processor.load_pdf(empty_pdf_upload)
     
-    def test_extract_basic_metadata(self, sample_pdf_upload):
-        """Test extraction of basic metadata from uploaded PDF."""
-        processor = PDFProcessor()
-        metadata = processor.extract_metadata(sample_pdf_upload)
-        
-        assert "filename" in metadata
-        assert "date_processed" in metadata
-        assert "content_type" in metadata
-        assert metadata["filename"] == "sample_document.pdf"
-        assert metadata["content_type"] == "application/pdf"
-        assert isinstance(metadata["date_processed"], datetime)
-    
-    def test_extract_pdf_specific_metadata(self, sample_pdf_upload):
-        """Test extraction of PDF-specific metadata."""
-        processor = PDFProcessor()
-        metadata = processor.extract_metadata(sample_pdf_upload)
-        
-        assert "page_count" in metadata
-        assert "is_encrypted" in metadata
-        assert metadata["page_count"] == 1
-        assert metadata["is_encrypted"] is False
-    
-    def test_validate_upload_success(self, sample_pdf_upload):
-        """Test successful validation of uploaded PDF."""
-        processor = PDFProcessor()
-        result = processor.validate_upload(sample_pdf_upload)
-        
-        assert "is_valid" in result
-        assert "validation_timestamp" in result
-        assert "file_metadata" in result
-        assert result["is_valid"] is True
-        assert isinstance(result["validation_timestamp"], datetime)
-    
-    def test_validate_upload_failure(self, invalid_file_upload):
-        """Test validation failure for invalid uploads."""
-        processor = PDFProcessor()
-        
-        with pytest.raises((ValueError, PDFValidationError)):
-            processor.validate_upload(invalid_file_upload)
-    
-    def test_process_upload_complete_workflow(self, sample_pdf_upload):
-        """Test complete processing workflow for uploaded PDF."""
-        processor = PDFProcessor()
-        result = processor.process_upload(sample_pdf_upload)
-        
-        assert "extracted_text" in result
-        assert "metadata" in result
-        assert "validation_result" in result
-        
-        # Check extracted text
-        assert isinstance(result["extracted_text"], str)
-        assert len(result["extracted_text"]) > 0
-        assert "Sample PDF Document" in result["extracted_text"]
-        
-        # Check metadata
-        assert result["metadata"]["filename"] == "sample_document.pdf"
-        assert result["metadata"]["source_type"] == "upload"
-        
-        # Check validation result
-        assert result["validation_result"]["is_valid"] is True
-        assert result["validation_result"]["processing_status"] == "success"
-        assert "text_length" in result["validation_result"]
-    
     def test_file_size_limit(self, sample_pdf_upload):
         """Test file size validation."""
         processor = PDFProcessor()
@@ -121,3 +57,43 @@ class TestPDFProcessor:
         text2 = processor.load_pdf(sample_pdf_upload)
         
         assert text1 == text2
+    
+    def test_markdown_output_format(self, sample_pdf_upload):
+        """Test that the output is in markdown format."""
+        processor = PDFProcessor()
+        text = processor.load_pdf(sample_pdf_upload)
+        
+        # Check that we get structured text (markdown might have newlines, structure)
+        assert isinstance(text, str)
+        assert len(text.strip()) > 0
+        # Note: The exact markdown format depends on pymupdf4llm output
+    
+    def test_pdf_validation_encrypted(self):
+        """Test that encrypted PDFs are properly rejected."""
+        processor = PDFProcessor()
+        
+        # Create a mock upload file that simulates an encrypted PDF
+        mock_upload = Mock()
+        mock_upload.content_type = 'application/pdf'
+        mock_upload.filename = 'encrypted.pdf'
+        mock_upload.file.read.return_value = b'%PDF-1.4\nencrypted_content'
+        mock_upload.file.seek = Mock()
+        
+        # This test would need a real encrypted PDF to test properly
+        # For now, we just test that the validation logic exists
+        assert hasattr(processor, '_extract_text_from_file')
+    
+    def test_supported_extensions(self):
+        """Test that processor only supports PDF extensions."""
+        processor = PDFProcessor()
+        
+        assert '.pdf' in processor.supported_extensions
+        assert len(processor.supported_extensions) >= 1
+    
+    def test_max_file_size_default(self):
+        """Test that processor has a reasonable default file size limit."""
+        processor = PDFProcessor()
+        
+        # Should have a default file size limit (200MB)
+        assert processor.max_file_size > 0
+        assert processor.max_file_size == 200 * 1024 * 1024

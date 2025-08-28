@@ -128,26 +128,11 @@ def mock_chroma_client():
 @pytest.fixture
 def sample_chunks():
     """Sample text chunks for testing."""
-    from rag.ingestion.text_chunker import ChunkWithMetadata
+    from rag.ingestion.text_chunker import TextChunk
     return [
-        ChunkWithMetadata("This is the first chunk of text.", "doc1.pdf", 0),
-        ChunkWithMetadata("This is the second chunk of text.", "doc1.pdf", 1),
-        ChunkWithMetadata("This is the third chunk from another document.", "doc2.pdf", 0)
-    ]
-
-
-@pytest.fixture
-def sample_chunk_dicts():
-    """Sample chunks as dictionaries for testing."""
-    return [
-        {
-            'content': 'This is the first chunk of text.',
-            'metadata': {'source_id': 'doc1.pdf', 'chunk_index': 0}
-        },
-        {
-            'content': 'This is the second chunk of text.',
-            'metadata': {'source_id': 'doc1.pdf', 'chunk_index': 1}
-        }
+        TextChunk("This is the first chunk of text."),
+        TextChunk("This is the second chunk of text."),
+        TextChunk("This is the third chunk from another document.")
     ]
 
 

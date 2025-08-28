@@ -84,14 +84,17 @@ class TestVectorStorage:
     @patch('rag.ingestion.vector_storage.get_chroma_client')
     @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
     @patch('uuid.uuid4')
-    def test_store_chunks_with_chunk_objects(self, mock_uuid, mock_openai_embeddings, mock_get_chroma_client, sample_chunks):
-        """Test storing ChunkWithMetadata objects."""
+    def test_store_chunks_with_textchunk_objects(self, mock_uuid, mock_openai_embeddings, mock_get_chroma_client):
+        """Test storing TextChunk objects."""
         from rag.ingestion.vector_storage import VectorStorage
+        from rag.ingestion.text_chunker import TextChunk
         
         # Setup mocks
-        mock_uuid.side_effect = [uuid.UUID('12345678-1234-5678-1234-567812345678'), 
-                                uuid.UUID('87654321-4321-8765-4321-876543218765'),
-                                uuid.UUID('11111111-2222-3333-4444-555555555555')]
+        mock_uuid.side_effect = [
+            uuid.UUID('12345678-1234-5678-1234-567812345678'), 
+            uuid.UUID('87654321-4321-8765-4321-876543218765'),
+            uuid.UUID('11111111-2222-3333-4444-555555555555')
+        ]
         
         mock_embeddings_instance = Mock()
         mock_embeddings_instance.embed_documents.return_value = [
@@ -104,8 +107,15 @@ class TestVectorStorage:
         mock_client.get_or_create_collection.return_value = mock_collection
         mock_get_chroma_client.return_value = mock_client
         
+        # Create TextChunk objects
+        chunks = [
+            TextChunk("This is the first chunk of text."),
+            TextChunk("This is the second chunk of text."),
+            TextChunk("This is the third chunk from another document.")
+        ]
+        
         storage = VectorStorage()
-        doc_ids = storage.store_chunks(sample_chunks)
+        doc_ids = storage.store_chunks(chunks)
         
         # Assertions
         assert len(doc_ids) == 3
@@ -114,13 +124,45 @@ class TestVectorStorage:
         
         assert len(call_args['documents']) == 3
         assert len(call_args['embeddings']) == 3
-        assert len(call_args['metadatas']) == 3
         assert len(call_args['ids']) == 3
         
         # Check content extraction
         assert call_args['documents'][0] == "This is the first chunk of text."
         assert call_args['documents'][1] == "This is the second chunk of text."
         assert call_args['documents'][2] == "This is the third chunk from another document."
+        
+        # Verify no metadata is stored
+        assert 'metadatas' not in call_args
+    
+    @patch('rag.ingestion.vector_storage.get_chroma_client')
+    @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
+    def test_store_chunks_with_strings(self, mock_openai_embeddings, mock_get_chroma_client):
+        """Test storing string chunks."""
+        from rag.ingestion.vector_storage import VectorStorage
+        
+        # Setup mocks
+        mock_embeddings_instance = Mock()
+        mock_embeddings_instance.embed_documents.return_value = [[0.1, 0.2], [0.3, 0.4]]
+        mock_openai_embeddings.return_value = mock_embeddings_instance
+        
+        mock_collection = Mock()
+        mock_client = Mock()
+        mock_client.get_or_create_collection.return_value = mock_collection
+        mock_get_chroma_client.return_value = mock_client
+        
+        storage = VectorStorage()
+        chunks = ["chunk 1", "chunk 2"]
+        
+        doc_ids = storage.store_chunks(chunks)
+        
+        # Should generate embeddings automatically
+        mock_embeddings_instance.embed_documents.assert_called_once_with(chunks)
+        
+        # Should store without metadata
+        mock_collection.add.assert_called_once()
+        call_args = mock_collection.add.call_args[1]
+        assert call_args['documents'] == chunks
+        assert 'metadatas' not in call_args
     
     @patch('rag.ingestion.vector_storage.get_chroma_client')
     @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
@@ -140,9 +182,8 @@ class TestVectorStorage:
         storage = VectorStorage()
         chunks = ["chunk 1", "chunk 2"]
         embeddings = [[0.1, 0.2], [0.3, 0.4]]
-        metadatas = [{"source": "doc1.pdf"}, {"source": "doc1.pdf"}]
         
-        doc_ids = storage.store_chunks(chunks, embeddings=embeddings, metadatas=metadatas)
+        doc_ids = storage.store_chunks(chunks, embeddings=embeddings)
         
         # Should not generate embeddings when provided
         mock_embeddings_instance.embed_documents.assert_not_called()
@@ -151,7 +192,6 @@ class TestVectorStorage:
         mock_collection.add.assert_called_once()
         call_args = mock_collection.add.call_args[1]
         assert call_args['embeddings'] == embeddings
-        assert call_args['metadatas'] == metadatas
     
     @patch('rag.ingestion.vector_storage.get_chroma_client')
     @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
@@ -176,30 +216,6 @@ class TestVectorStorage:
         assert stats['total_documents'] == 42
         assert stats['embedding_model'] == 'test-model'
         mock_collection.count.assert_called_once()
-    
-    @patch('rag.ingestion.vector_storage.get_chroma_client')
-    @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
-    def test_delete_by_metadata(self, mock_openai_embeddings, mock_get_chroma_client):
-        """Test deleting documents by metadata filter."""
-        from rag.ingestion.vector_storage import VectorStorage
-        
-        # Setup mocks
-        mock_embeddings_instance = Mock()
-        mock_openai_embeddings.return_value = mock_embeddings_instance
-        
-        mock_collection = Mock()
-        mock_collection.get.return_value = {'ids': ['id1', 'id2', 'id3']}
-        mock_client = Mock()
-        mock_client.get_or_create_collection.return_value = mock_collection
-        mock_get_chroma_client.return_value = mock_client
-        
-        storage = VectorStorage()
-        where_filter = {'source': 'doc1.pdf'}
-        deleted_count = storage.delete_by_metadata(where_filter)
-        
-        assert deleted_count == 3
-        mock_collection.get.assert_called_once_with(where=where_filter)
-        mock_collection.delete.assert_called_once_with(ids=['id1', 'id2', 'id3'])
     
     @patch('rag.ingestion.vector_storage.get_chroma_client')
     @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
@@ -266,3 +282,53 @@ class TestVectorStorage:
         
         with pytest.raises(ValueError, match="Embedding generation failed"):
             storage.generate_embeddings(["test chunk"])
+    
+    @patch('rag.ingestion.vector_storage.get_chroma_client')
+    @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
+    def test_store_chunks_batch_processing(self, mock_openai_embeddings, mock_get_chroma_client):
+        """Test storing chunks with batch processing."""
+        from rag.ingestion.vector_storage import VectorStorage
+        
+        # Setup mocks
+        mock_embeddings_instance = Mock()
+        # Create embeddings for a large number of chunks
+        large_embeddings = [[0.1, 0.2] for _ in range(500)]
+        mock_embeddings_instance.embed_documents.return_value = large_embeddings
+        mock_openai_embeddings.return_value = mock_embeddings_instance
+        
+        mock_collection = Mock()
+        mock_client = Mock()
+        mock_client.get_or_create_collection.return_value = mock_collection
+        mock_get_chroma_client.return_value = mock_client
+        
+        storage = VectorStorage()
+        # Create a large number of chunks to test batching
+        chunks = [f"chunk {i}" for i in range(500)]
+        
+        doc_ids = storage.store_chunks(chunks, batch_size=100)
+        
+        # Should call add multiple times for batching
+        assert mock_collection.add.call_count >= 2
+        assert len(doc_ids) == 500
+    
+    @patch('rag.ingestion.vector_storage.get_chroma_client')
+    @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
+    def test_store_chunks_dimension_mismatch_error(self, mock_openai_embeddings, mock_get_chroma_client):
+        """Test error handling when text and embedding dimensions don't match."""
+        from rag.ingestion.vector_storage import VectorStorage
+        
+        # Setup mocks
+        mock_embeddings_instance = Mock()
+        mock_openai_embeddings.return_value = mock_embeddings_instance
+        
+        mock_collection = Mock()
+        mock_client = Mock()
+        mock_client.get_or_create_collection.return_value = mock_collection
+        mock_get_chroma_client.return_value = mock_client
+        
+        storage = VectorStorage()
+        chunks = ["chunk 1", "chunk 2"]
+        embeddings = [[0.1, 0.2]]  # Only one embedding for two chunks
+        
+        with pytest.raises(ValueError, match="Texts and embeddings must have the same length"):
+            storage.store_chunks(chunks, embeddings=embeddings)

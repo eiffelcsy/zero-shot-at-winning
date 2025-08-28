@@ -1,16 +1,16 @@
 import logging
 import uuid
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from langchain_openai import OpenAIEmbeddings
 from chroma.chroma_connection import get_chroma_client
-from rag.ingestion.text_chunker import ChunkWithMetadata
+from rag.ingestion.text_chunker import TextChunk
 
 logger = logging.getLogger(__name__)
 
 
 class VectorStorage:
     
-    def __init__(self, embedding_model: str = "text-embedding-3-large", collection_name: str = "rag_collection"):
+    def __init__(self, embedding_model: str = "text-embedding-3-large", collection_name: str = "regulation_kb"):
         """
         Initialize the VectorStorage with OpenAI embeddings and ChromaDB.
         
@@ -32,45 +32,6 @@ class VectorStorage:
         )
         
         logger.info(f"Initialized VectorStorage with model {embedding_model} and collection {collection_name}")
-    
-    def _sanitize_metadata_for_chromadb(self, metadatas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Sanitize metadata to ensure ChromaDB compatibility.
-        
-        ChromaDB only accepts str, int, float, bool, or None as metadata values.
-        This method converts or removes incompatible types.
-        
-        Args:
-            metadatas: List of metadata dictionaries
-            
-        Returns:
-            List of sanitized metadata dictionaries
-        """        
-        sanitized_metadatas = []
-        
-        for i, metadata in enumerate(metadatas):
-            sanitized_metadata = {}
-            
-            for key, value in metadata.items():
-                if value is None:
-                    # Remove None values as they can cause JSON deserialization issues
-                    continue
-                elif isinstance(value, (str, int, float, bool)):
-                    # Already valid types
-                    sanitized_metadata[key] = value
-                else:
-                    # Convert other types to string
-                    try:
-                        sanitized_value = str(value)
-                        sanitized_metadata[key] = sanitized_value
-                    except Exception as e:
-                        logger.warning(f"Failed to convert metadata value for key '{key}': {e}")
-                        # Skip this metadata entry if conversion fails
-                        continue
-            
-            sanitized_metadatas.append(sanitized_metadata)
-        
-        return sanitized_metadatas
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
@@ -98,18 +59,18 @@ class VectorStorage:
     
     def store_chunks(
         self, 
-        chunks: List[Union[ChunkWithMetadata, Dict[str, Any], str]], 
+        chunks: List[Union[TextChunk, str]], 
         embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         batch_size: int = 300
     ) -> List[str]:
         """
         Store text chunks with their embeddings in ChromaDB in batches.
         
         Args:
-            chunks: List of text chunks (can be ChunkWithMetadata objects, dicts, or strings)
+            chunks: List of text chunks (can be TextChunk objects or strings)
             embeddings: Optional pre-computed embeddings. If None, will generate them
-            metadatas: Optional metadata for each chunk. If None, will extract from chunks
+            metadata: Optional metadata dictionary containing regulation_name, geo_jurisdiction, etc.
             batch_size: Number of records to send to ChromaDB per batch (default: 300)
             
         Returns:
@@ -120,45 +81,45 @@ class VectorStorage:
             return []
         
         try:
-            # Extract text content from chunks
+            # Extract text content and prepare metadata for chunks
             texts = []
-            extracted_metadatas = []
+            chunk_metadata = []
             
             for i, chunk in enumerate(chunks):
-                if isinstance(chunk, ChunkWithMetadata):
-                    texts.append(chunk.content)
-                    extracted_metadatas.append(chunk.metadata)
-                elif isinstance(chunk, dict):
-                    texts.append(chunk.get('content', str(chunk)))
-                    extracted_metadatas.append(chunk.get('metadata', {}))
+                chunk_text = ""
+                chunk_index = i  # Default chunk index
+                
+                if isinstance(chunk, TextChunk):
+                    chunk_text = chunk.content
+                    chunk_index = chunk.chunk_index
                 elif isinstance(chunk, str):
-                    texts.append(chunk)
-                    extracted_metadatas.append({'chunk_index': i})
+                    chunk_text = chunk
                 else:
-                    texts.append(str(chunk))
-                    extracted_metadatas.append({'chunk_index': i})
-            
-            # Use provided metadatas or extracted ones
-            final_metadatas = metadatas if metadatas is not None else extracted_metadatas
-            
-            # Sanitize metadata for ChromaDB compatibility
-            final_metadatas = self._sanitize_metadata_for_chromadb(final_metadatas)
-            
-            invalid_types_found = {}
-            for i, metadata in enumerate(final_metadatas):
-                for key, value in metadata.items():
-                    value_type = type(value).__name__
-                    if value_type not in ['str', 'int', 'float', 'bool', 'NoneType']:
-                        if key not in invalid_types_found:
-                            invalid_types_found[key] = value_type
+                    chunk_text = str(chunk)
+                
+                texts.append(chunk_text)
+                
+                # Prepare metadata for this chunk
+                chunk_meta = {
+                    'chunk_index': chunk_index
+                }
+                
+                # Add document-level metadata if provided
+                if metadata:
+                    chunk_meta.update(metadata)
+                    logger.debug(f"Added metadata to chunk {chunk_index}: {chunk_meta}")
+                else:
+                    logger.debug(f"No metadata provided for chunk {chunk_index}")
+                
+                chunk_metadata.append(chunk_meta)
             
             # Generate embeddings if not provided
             if embeddings is None:
                 embeddings = self.generate_embeddings(texts)
             
             # Validate dimensions match
-            if len(texts) != len(embeddings) or len(texts) != len(final_metadatas):
-                raise ValueError("Texts, embeddings, and metadatas must have the same length")
+            if len(texts) != len(embeddings):
+                raise ValueError("Texts and embeddings must have the same length")
             
             # Generate unique IDs for each chunk
             document_ids = [str(uuid.uuid4()) for _ in range(len(texts))]
@@ -172,8 +133,8 @@ class VectorStorage:
                 self.collection.add(
                     documents=texts,
                     embeddings=embeddings,
-                    metadatas=final_metadatas,
-                    ids=document_ids
+                    ids=document_ids,
+                    metadatas=chunk_metadata
                 )
                 all_stored_ids = document_ids
                 logger.info(f"Stored {total_chunks} chunks in single batch")
@@ -188,15 +149,15 @@ class VectorStorage:
                     
                     batch_texts = texts[start_idx:end_idx]
                     batch_embeddings = embeddings[start_idx:end_idx]
-                    batch_metadatas = final_metadatas[start_idx:end_idx]
                     batch_ids = document_ids[start_idx:end_idx]
+                    batch_metadata = chunk_metadata[start_idx:end_idx]
                     
                     try:
                         self.collection.add(
                             documents=batch_texts,
                             embeddings=batch_embeddings,
-                            metadatas=batch_metadatas,
-                            ids=batch_ids
+                            ids=batch_ids,
+                            metadatas=batch_metadata
                         )
                         all_stored_ids.extend(batch_ids)
                         logger.info(f"Successfully stored batch {batch_idx + 1}/{num_batches} "
@@ -236,31 +197,6 @@ class VectorStorage:
                 'embedding_model': self.embedding_model,
                 'error': str(e)
             }
-    
-    def delete_by_metadata(self, where: Dict[str, Any]) -> int:
-        """
-        Delete documents from the collection based on metadata filter.
-        
-        Args:
-            where: Metadata filter to select documents for deletion
-            
-        Returns:
-            Number of documents deleted
-        """
-        try:
-            # Get documents matching the filter
-            results = self.collection.get(where=where)
-            
-            if results['ids']:
-                self.collection.delete(ids=results['ids'])
-                deleted_count = len(results['ids'])
-                return deleted_count
-            else:
-                return 0
-                
-        except Exception as e:
-            logger.error(f"Failed to delete documents: {e}")
-            raise ValueError(f"Document deletion failed: {e}")
     
     def clear_collection(self) -> bool:
         """

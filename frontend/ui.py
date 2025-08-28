@@ -103,14 +103,30 @@ def submit_feedback(analysis_id: str, feedback_type: str, feedback_text: str = N
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-def upload_regulation_files_batch(uploaded_files):
-    """Batch upload function using the enhanced PDF processing pipeline."""
+def upload_regulation_files_batch(files_with_metadata):
+    """Batch upload function using the enhanced PDF processing pipeline with metadata."""
     try:
         files = []
-        for uploaded_file in uploaded_files:
-            files.append(("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")))
+        metadata = {}
         
-        response = requests.post(f"{API_BASE_URL}/api/v1/upload-pdfs", files=files, timeout=120)
+        for i, item in enumerate(files_with_metadata):
+            uploaded_file = item['file']
+            files.append(("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")))
+            
+            # Store metadata for each file using filename as key
+            metadata[uploaded_file.name] = {
+                'regulation_name': item['regulation_name'],
+                'geo_jurisdiction': item['geo_jurisdiction']
+            }
+        
+        # Send files and metadata separately
+        data = {'metadata': json.dumps(metadata)}
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/upload-pdfs", 
+            files=files, 
+            data=data,
+            timeout=120
+        )
         return response
     except Exception as e:
         return None
@@ -562,6 +578,63 @@ elif page == "📤 Upload Regulations":
         help="Upload regulation PDF documents to be indexed and added to the compliance knowledge base"
     )
     
+    # Metadata input fields for regulation documents
+    if uploaded_files:
+        st.markdown("### 📋 Document Metadata")
+        st.markdown("Please provide metadata for each uploaded regulation document:")
+        
+        # Initialize metadata storage in session state
+        if 'pdf_metadata' not in st.session_state:
+            st.session_state.pdf_metadata = {}
+        
+        # Create metadata inputs for each uploaded file
+        metadata_forms = []
+        for i, uploaded_file in enumerate(uploaded_files):
+            file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+            
+            # Initialize metadata for this file if not exists
+            if file_key not in st.session_state.pdf_metadata:
+                st.session_state.pdf_metadata[file_key] = {
+                    'regulation_name': '',
+                    'geo_jurisdiction': ''
+                }
+            
+            with st.expander(f"📄 {uploaded_file.name}", expanded=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    regulation_name = st.text_input(
+                        "Regulation Name/Title*",
+                        value=st.session_state.pdf_metadata[file_key]['regulation_name'],
+                        placeholder="e.g., Utah Social Media Regulation Act",
+                        help="Enter the official name or title of the regulation",
+                        key=f"reg_name_{i}_{file_key}"
+                    )
+                    st.session_state.pdf_metadata[file_key]['regulation_name'] = regulation_name
+                
+                with col2:
+                    geo_jurisdiction = st.text_input(
+                        "Geographic Jurisdiction*",
+                        value=st.session_state.pdf_metadata[file_key]['geo_jurisdiction'],
+                        placeholder="e.g., Utah, USA or European Union",
+                        help="Enter the geographic jurisdiction where this regulation applies",
+                        key=f"geo_jurisdiction_{i}_{file_key}"
+                    )
+                    st.session_state.pdf_metadata[file_key]['geo_jurisdiction'] = geo_jurisdiction
+                
+                # Validation indicators
+                if regulation_name and geo_jurisdiction:
+                    st.success("✅ Metadata complete")
+                else:
+                    st.warning("⚠️ Please fill in both regulation name and geographic jurisdiction")
+        
+        # Check if all metadata is complete
+        all_metadata_complete = all(
+            st.session_state.pdf_metadata.get(f"{f.name}_{f.size}", {}).get('regulation_name') and
+            st.session_state.pdf_metadata.get(f"{f.name}_{f.size}", {}).get('geo_jurisdiction')
+            for f in uploaded_files
+        )
+    
     if uploaded_files:
         st.markdown("### 📋 Upload Status")
         
@@ -580,18 +653,39 @@ elif page == "📤 Upload Regulations":
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
-            if st.button("🚀 Upload All Files", use_container_width=True, type="primary"):
-                with st.spinner(f"Processing {len(uploaded_files)} PDF files through the ingestion pipeline..."):
-                    try:
-                        response = upload_regulation_files_batch(uploaded_files)
-                        
-                        if response and response.status_code == 200:
-                            result = response.json()
-                            st.success(f"🎉 {result.get('message', 'Files uploaded successfully!')}")
-                        else:
-                            st.error("❌ Upload failed")
-                    except Exception as e:
-                        st.error(f"❌ Upload error: {str(e)}")
+            upload_disabled = not all_metadata_complete
+            button_text = "🚀 Upload All Files" if all_metadata_complete else "⚠️ Complete Metadata First"
+            
+            if st.button(button_text, use_container_width=True, type="primary", disabled=upload_disabled):
+                if all_metadata_complete:
+                    with st.spinner(f"Processing {len(uploaded_files)} PDF files through the ingestion pipeline..."):
+                        try:
+                            # Prepare metadata for each file
+                            files_with_metadata = []
+                            for uploaded_file in uploaded_files:
+                                file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+                                metadata = st.session_state.pdf_metadata[file_key]
+                                files_with_metadata.append({
+                                    'file': uploaded_file,
+                                    'regulation_name': metadata['regulation_name'],
+                                    'geo_jurisdiction': metadata['geo_jurisdiction']
+                                })
+                            
+                            response = upload_regulation_files_batch(files_with_metadata)
+                            
+                            if response and response.status_code == 200:
+                                result = response.json()
+                                st.success(f"🎉 {result.get('message', 'Files uploaded successfully!')}")
+                                
+                                # Clear metadata after successful upload
+                                st.session_state.pdf_metadata = {}
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Upload failed: {str(response)}")
+                        except Exception as e:
+                            st.error(f"❌ Upload error: {str(e)}")
+                else:
+                    st.error("❌ Please complete metadata for all files before uploading")
 
 # ================================================
 # Page 3: Analytics Dashboard (unchanged)
