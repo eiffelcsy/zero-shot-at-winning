@@ -1,5 +1,7 @@
 from langchain.prompts import PromptTemplate
 
+# [STATIC BASE CONTEXT] + [DYNAMIC MEMORY OVERLAY] + [TASK-SPECIFIC INSTRUCTIONS]
+
 # Internal TikTok context mapping for all agents
 TIKTOK_CONTEXT = """
 INTERNAL TIKTOK TERMINOLOGY (Provides information about what each term/acronym means, critical for analysis):
@@ -102,16 +104,16 @@ Return ONLY valid JSON:
 }}
 """
 
-# Create PromptTemplate objects
-SCREENING_PROMPT = PromptTemplate(
-    input_variables=["feature_name"", feature_description", "context_documents"],
-    template=SCREENING_PROMPT_TEMPLATE
-)
+# # Create PromptTemplate objects
+# SCREENING_PROMPT = PromptTemplate(
+#     input_variables=["feature_name"", feature_description", "context_documents"],
+#     template=SCREENING_PROMPT_TEMPLATE
+# )
 
-RESEARCH_PROMPT = PromptTemplate(
-    input_variables=["screening_analysis", "evidence_found"],
-    template=RESEARCH_PROMPT_TEMPLATE
-)
+# RESEARCH_PROMPT = PromptTemplate(
+#     input_variables=["screening_analysis", "evidence_found"],
+#     template=RESEARCH_PROMPT_TEMPLATE
+# )
 
 # Validation prompt template (for future use)
 VALIDATION_PROMPT_TEMPLATE = TIKTOK_CONTEXT + """
@@ -132,10 +134,10 @@ Return ONLY valid JSON:
 }}
 """
 
-VALIDATION_PROMPT = PromptTemplate(
-    input_variables=["screening_result", "research_result"],
-    template=VALIDATION_PROMPT_TEMPLATE
-)
+# VALIDATION_PROMPT = PromptTemplate(
+#     input_variables=["screening_result", "research_result"],
+#     template=VALIDATION_PROMPT_TEMPLATE
+# )
 
 # Common output format schema for reference
 COMPLIANCE_OUTPUT_SCHEMA = {
@@ -148,3 +150,25 @@ COMPLIANCE_OUTPUT_SCHEMA = {
     "needs_human_review": "boolean",
     "compliance_patterns": "list of compliance categories detected"
 }
+
+
+def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + SCREENING_PROMPT_TEMPLATE
+    return PromptTemplate(
+        input_variables=["feature_name"", feature_description", "context_documents"],
+        template=template
+    )
+
+def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + RESEARCH_PROMPT_TEMPLATE
+    return PromptTemplate(
+        input_variables=["screening_analysis", "evidence_found"],
+        template=template
+    )
+
+def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT_TEMPLATE
+    return PromptTemplate(
+        input_variables=["screening_result", "research_result"],
+        template=template
+    )
