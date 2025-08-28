@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import UploadFile
 
 from rag.ingestion.pdf_processor import PDFProcessor, PDFValidationError
@@ -15,7 +15,7 @@ class PDFIngestionPipeline:
     
     This pipeline handles the complete workflow:
     1. PDF processing and text extraction
-    2. Text chunking with metadata
+    2. Text chunking
     3. Embedding generation
     4. Storage in ChromaDB
     """
@@ -25,7 +25,7 @@ class PDFIngestionPipeline:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embedding_model: str = "text-embedding-3-large",
-        collection_name: str = "rag_collection",
+        collection_name: str = "regulation_kb",
         batch_size: int = 300
     ):
         """
@@ -49,32 +49,32 @@ class PDFIngestionPipeline:
         logger.info(f"Initialized PDFIngestionPipeline with chunk_size={chunk_size}, "
                    f"overlap={chunk_overlap}, model={embedding_model}, batch_size={batch_size}")
     
-    def process_pdf(self, pdf_file: UploadFile) -> Dict[str, Any]:
+    def process_pdf(self, pdf_file: UploadFile, file_metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Process a single uploaded PDF file through the complete ingestion pipeline.
         
         Args:
             pdf_file: FastAPI UploadFile object from Streamlit file uploader
+            file_metadata: Optional metadata dictionary containing regulation_name, geo_jurisdiction, etc.
             
         Returns:
             Dictionary containing processing results and statistics
         """
         try:
-            logger.info(f"Starting PDF processing pipeline for: {getattr(pdf_file, 'filename', pdf_file)}")
+            filename = getattr(pdf_file, 'filename', 'unknown_document')
+            logger.info(f"Starting PDF processing pipeline for: {filename}")
             
-            # Step 1: Extract text and metadata from uploaded PDF
+            # Step 1: Extract text from uploaded PDF
             extracted_text = self.pdf_processor.load_pdf(pdf_file)
-            metadata = self.pdf_processor.extract_metadata(pdf_file)
             
             # Step 2: Chunk the extracted text
-            source_id = metadata.get('filename', 'unknown_document')
-            chunks = self.text_chunker.chunk_text(extracted_text, source_id=source_id)
+            chunks = self.text_chunker.chunk_text(extracted_text)
             
             if not chunks:
                 return {
                     'status': 'warning',
                     'message': 'No text chunks generated from PDF',
-                    'filename': source_id,
+                    'filename': filename,
                     'chunks_processed': 0
                 }
             
@@ -82,43 +82,42 @@ class PDFIngestionPipeline:
             chunk_texts = [chunk.content for chunk in chunks]
             embeddings = self.vector_storage.generate_embeddings(chunk_texts)
             
-            # Prepare metadata for storage
-            chunk_metadatas = []
-            for chunk in chunks:
-                chunk_metadata = {
-                    **metadata,  # Include original PDF metadata
-                    **chunk.metadata,  # Include chunk-specific metadata
-                    'processing_pipeline': 'PDFIngestionPipeline',
-                    'chunk_content_preview': chunk.content[:100] + '...' if len(chunk.content) > 100 else chunk.content
-                }
-                chunk_metadatas.append(chunk_metadata)
+            # Step 4: Store chunks with embeddings and metadata in batches
+            # Prepare metadata for this specific file
+            storage_metadata = {
+                'source_filename': filename
+            }
             
-            # Step 4: Store chunks with embeddings in batches
+            # Add file-specific metadata if provided
+            if file_metadata:
+                storage_metadata.update(file_metadata)
+                logger.info(f"Added file metadata to storage_metadata: {storage_metadata}")
+            else:
+                logger.warning(f"No file metadata provided for {filename}")
+            
             document_ids = self.vector_storage.store_chunks(
                 chunks=chunks,
                 embeddings=embeddings,
-                metadatas=chunk_metadatas,
+                metadata=storage_metadata,
                 batch_size=self.batch_size
             )
             
             # Create success result
             result = {
                 'status': 'success',
-                'filename': source_id,
+                'filename': filename,
                 'chunks_processed': len(chunks),
                 'document_ids': document_ids,
                 'text_length': len(extracted_text),
-                'metadata': metadata,
                 'chunk_stats': self.text_chunker.get_chunk_stats(chunks),
                 'processing_details': {
-                    'pdf_pages': metadata.get('page_count', 'unknown'),
                     'text_extraction_successful': True,
                     'embeddings_generated': len(embeddings),
                     'storage_successful': True
                 }
             }
             
-            logger.info(f"Successfully processed PDF {source_id}: {len(chunks)} chunks stored")
+            logger.info(f"Successfully processed PDF {filename}: {len(chunks)} chunks stored")
             return result
             
         except (ValueError, PDFValidationError) as e:
@@ -140,12 +139,13 @@ class PDFIngestionPipeline:
                 'chunks_processed': 0
             }
     
-    def process_batch(self, pdf_files: List[UploadFile]) -> List[Dict[str, Any]]:
+    def process_batch(self, pdf_files: List[UploadFile], files_metadata: Optional[Dict[str, Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
         """
         Process multiple uploaded PDF files through the ingestion pipeline.
         
         Args:
             pdf_files: List of FastAPI UploadFile objects from Streamlit file uploader
+            files_metadata: Optional dictionary mapping filename to metadata dict
             
         Returns:
             List of dictionaries containing processing results for each file
@@ -162,10 +162,16 @@ class PDFIngestionPipeline:
         
         for i, pdf_file in enumerate(pdf_files):
             try:
-                logger.info(f"Processing batch item {i+1}/{len(pdf_files)}: "
-                           f"{getattr(pdf_file, 'filename', pdf_file)}")
+                filename = getattr(pdf_file, 'filename', str(pdf_file))
+                logger.info(f"Processing batch item {i+1}/{len(pdf_files)}: {filename}")
                 
-                result = self.process_pdf(pdf_file)
+                # Get metadata for this specific file
+                file_metadata = None
+                if files_metadata and filename in files_metadata:
+                    file_metadata = files_metadata[filename]
+                    logger.info(f"Using metadata for {filename}: {file_metadata}")
+                
+                result = self.process_pdf(pdf_file, file_metadata)
                 results.append(result)
                 
                 if result['status'] == 'success':

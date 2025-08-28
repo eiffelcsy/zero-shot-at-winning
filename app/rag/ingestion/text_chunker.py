@@ -1,22 +1,16 @@
 import logging
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Dict, Any
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
 
-class ChunkWithMetadata:
-    """A text chunk with associated metadata."""
+class TextChunk:
+    """A text chunk with content and index."""
     
-    def __init__(self, content: str, source_id: Optional[str] = None, chunk_index: int = 0):
+    def __init__(self, content: str, chunk_index: int = 0):
         self.content = content
-        self.source_id = source_id
         self.chunk_index = chunk_index
-        self.metadata = {
-            'source_id': source_id,
-            'chunk_index': chunk_index,
-            'chunk_length': len(content)
-        }
     
     def __str__(self) -> str:
         return self.content
@@ -56,16 +50,15 @@ class TextChunker:
         
         logger.info(f"Initialized TextChunker with chunk_size={chunk_size}, overlap={overlap}")
     
-    def chunk_text(self, text: str, source_id: Optional[str] = None) -> List[Union[ChunkWithMetadata, Dict[str, Any]]]:
+    def chunk_text(self, text: str) -> List[TextChunk]:
         """
         Split text into chunks with overlap.
         
         Args:
             text: The text to be chunked
-            source_id: Optional identifier for the source document
             
         Returns:
-            List of text chunks with metadata
+            List of text chunks
         """
         # Handle empty or whitespace-only text
         if not text or not text.strip():
@@ -76,16 +69,14 @@ class TextChunker:
             # Use LangChain's text splitter to create chunks
             raw_chunks = self.splitter.split_text(text)
             
-            # Create chunks with metadata
+            # Create text chunks with sequential indexing
             chunks = []
-            for i, chunk_content in enumerate(raw_chunks):
+            chunk_index = 0
+            for chunk_content in raw_chunks:
                 if chunk_content.strip():  # Only include non-empty chunks
-                    chunk_with_metadata = ChunkWithMetadata(
-                        content=chunk_content,
-                        source_id=source_id,
-                        chunk_index=i
-                    )
-                    chunks.append(chunk_with_metadata)
+                    chunk = TextChunk(content=chunk_content, chunk_index=chunk_index)
+                    chunks.append(chunk)
+                    chunk_index += 1
             
             logger.info(f"Successfully chunked text into {len(chunks)} chunks")
             logger.debug(f"Chunk sizes: {[len(chunk) for chunk in chunks]}")
@@ -96,50 +87,7 @@ class TextChunker:
             logger.error(f"Failed to chunk text: {e}")
             raise ValueError(f"Text chunking failed: {e}")
     
-    def chunk_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Chunk multiple documents from the PDF processor.
-        
-        Args:
-            documents: List of documents with 'extracted_text' and 'metadata' keys
-            
-        Returns:
-            List of chunked documents with metadata
-        """
-        chunked_documents = []
-        
-        for doc in documents:
-            try:
-                text = doc.get('extracted_text', '')
-                metadata = doc.get('metadata', {})
-                source_id = metadata.get('filename', 'unknown_document')
-                
-                # Chunk the text
-                chunks = self.chunk_text(text, source_id=source_id)
-                
-                # Create document entries for each chunk
-                for chunk in chunks:
-                    chunked_doc = {
-                        'content': chunk.content,
-                        'metadata': {
-                            **metadata,  # Include original document metadata
-                            'chunk_index': chunk.chunk_index,
-                            'chunk_length': len(chunk.content),
-                            'source_id': source_id,
-                            'original_document_length': len(text)
-                        }
-                    }
-                    chunked_documents.append(chunked_doc)
-                    
-                logger.info(f"Chunked document {source_id} into {len(chunks)} chunks")
-                
-            except Exception as e:
-                logger.error(f"Failed to chunk document {doc.get('metadata', {}).get('filename', 'unknown')}: {e}")
-                continue
-        
-        return chunked_documents
-    
-    def get_chunk_stats(self, chunks: List[Union[ChunkWithMetadata, Dict[str, Any]]]) -> Dict[str, Any]:
+    def get_chunk_stats(self, chunks: List[TextChunk]) -> Dict[str, Any]:
         """
         Get statistics about the chunked text.
         
