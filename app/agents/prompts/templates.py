@@ -125,12 +125,18 @@ VALIDATION TASK: Cross-verify the compliance assessment for consistency and accu
 
 Return ONLY valid JSON:
 {{
-    "validation_status": "CONFIRMED|DISPUTED|UNCLEAR",
-    "final_risk_level": "LOW|MEDIUM|HIGH", 
-    "final_compliance_required": true/false,
-    "confidence": 0.0-1.0,
-    "conflicts_found": ["conflict1", "conflict2"],
-    "reasoning": "validation analysis and recommendations"
+  "needs_geo_logic": "YES",
+  "reasoning": "Provide a detailed explanation (10–1200 characters) of why the compliance decision was made, referencing research findings and screening analysis.",
+  "related_regulations": [
+    {
+      "name": "General Data Protection Regulation (GDPR)",
+      "jurisdiction": "EU",
+      "section": "Article 44 - Transfers of personal data to third countries",
+      "url": "https://gdpr-info.eu/art-44-gdpr/",
+      "evidence_excerpt": "Transfers of personal data to a third country may only take place if the conditions laid down in this Regulation are complied with."
+    }
+  ],
+  "confidence_score": 0.85
 }}
 """
 
