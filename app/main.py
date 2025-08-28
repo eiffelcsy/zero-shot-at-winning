@@ -4,8 +4,7 @@ from chroma.chroma_connection import get_chroma_collection
 from pydantic import BaseModel
 from typing import Optional
 
-# Import the PDF upload router
-from api.v1.router import router as pdf_router
+from api.v1.router import router
 
 class RequestBody(BaseModel):
     ids: list[str]
@@ -27,8 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include the PDF upload router
-app.include_router(pdf_router)
+app.include_router(router)
 
 # Health check endpoint
 @app.get("/health")

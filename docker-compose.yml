@@ -10,8 +10,6 @@ services:
       - .env
     volumes:
       - ./app:/app
-      - ./data:/app/data
-      - ./logs:/app/logs
     depends_on:
       - chroma
     networks:
