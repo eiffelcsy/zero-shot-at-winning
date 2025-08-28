@@ -24,15 +24,23 @@ class ValidationOutput(BaseModel):
 class ValidationAgent(BaseComplianceAgent):
     """Final decision-maker agent - validates compliance requirements"""
     
-    def __init__(self):
+    def __init__(self, memory_overlay: str = ""):
         super().__init__("ValidationAgent", temperature=0.0)  # Low temperature for consistency
         self._setup_chain()
+        self.memory_overlay = memory_overlay
     
     def _setup_chain(self):
         """Setup LangChain prompt and parser"""
-        self.prompt_template = build_validation_prompt("")
+        validation_prompt = build_validation_prompt(self.memory_overlay)
+        self.prompt_template = validation_prompt
         self.output_parser = JsonOutputParser(pydantic_object=ValidationOutput)
         self.chain = self.prompt_template | self.llm | self.output_parser
+        self.create_chain(validation_prompt, ValidationOutput)
+
+    def update_memory(self, new_memory_overlay: str):
+        """Allow runtime updates to the prompt for learning"""
+        self.memory_overlay = new_memory_overlay
+        self._setup_chain()
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph-compatible process method"""
