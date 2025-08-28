@@ -6,7 +6,7 @@ from datetime import datetime
 
 import chromadb
 
-from .prompts.templates import RESEARCH_PROMPT
+from .prompts.templates import build_research_prompt
 from .base import BaseComplianceAgent
 from .tools.jurisdiction_check import JurisdictionChecker
 from .tools.regulation_search import RegulationSearcher
@@ -24,14 +24,14 @@ class ResearchOutput(BaseModel):
 class ResearchAgent(BaseComplianceAgent):
     """Research Agent - finds relevant regulations using ChromaDB knowledge base only"""
 
-    def __init__(self, chroma_host: str = "localhost", chroma_port: int = 8001):
+    def __init__(self, chroma_host: str = "localhost", chroma_port: int = 8001, memory_overlay: str = ""):
         super().__init__("ResearchAgent")
+        self.memory_overlay = memory_overlay
         
-        # Initialize ChromaDB client (no fallback to JSONL)
+        # Initialize ChromaDB client
         try:
             self.chroma_client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
         except Exception:
-            # Fallback to persistent client
             self.chroma_client = chromadb.PersistentClient(path="./chroma_db")
 
         # Initialize ChromaDB tools
@@ -43,8 +43,15 @@ class ResearchAgent(BaseComplianceAgent):
         self._setup_chain()
 
     def _setup_chain(self):
-        """Setup LangChain prompt and parser"""
-        self.create_chain(RESEARCH_PROMPT, ResearchOutput)
+        """Setup LangChain prompt and parser with dynamic prompt building"""
+        research_prompt = build_research_prompt(self.memory_overlay)
+        self.create_chain(research_prompt, ResearchOutput)
+    
+    def update_memory(self, new_memory_overlay: str):
+        """Allow runtime updates to the prompt for learning"""
+        self.memory_overlay = new_memory_overlay
+        self._setup_chain()
+
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """ChromaDB-only research process"""

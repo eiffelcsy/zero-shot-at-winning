@@ -28,7 +28,7 @@ INTERNAL TIKTOK TERMINOLOGY (Provides information about what each term/acronym m
 """
 
 # Screening agent prompt template
-SCREENING_PROMPT_TEMPLATE = TIKTOK_CONTEXT + """
+SCREENING_PROMPT_TEMPLATE = """
 
 FEATURE TO ANALYZE: {feature_description}
 
@@ -66,7 +66,7 @@ Return ONLY valid JSON matching this schema:
 """
 
 # Research agent prompt template
-RESEARCH_PROMPT_TEMPLATE = TIKTOK_CONTEXT + """
+RESEARCH_PROMPT_TEMPLATE = """
 
 SCREENING ANALYSIS FROM PREVIOUS AGENT:
 {screening_analysis}
@@ -116,7 +116,7 @@ Return ONLY valid JSON:
 # )
 
 # Validation prompt template (for future use)
-VALIDATION_PROMPT_TEMPLATE = TIKTOK_CONTEXT + """
+VALIDATION_PROMPT_TEMPLATE = """
 
 SCREENING ANALYSIS: {screening_result}
 RESEARCH FINDINGS: {research_result}
@@ -155,7 +155,7 @@ COMPLIANCE_OUTPUT_SCHEMA = {
 def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
     template = TIKTOK_CONTEXT + "\n" + memory_overlay + SCREENING_PROMPT_TEMPLATE
     return PromptTemplate(
-        input_variables=["feature_name"", feature_description", "context_documents"],
+        input_variables=["feature_description", "context_documents"],
         template=template
     )
 
