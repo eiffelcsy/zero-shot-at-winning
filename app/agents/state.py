@@ -26,6 +26,11 @@ class ComplianceState(TypedDict):
     research_timestamp: Optional[str]
     research_error: Optional[str]
     
+    # Enhanced research outputs with ChromaDB
+    research_risk_assessment: Optional[Dict[str, Any]]
+    research_jurisdictions: Optional[List[Dict]]
+    research_compliance_patterns: Optional[List[str]]
+    
     # Validation agent outputs (for future implementation)
     validation_analysis: Optional[Dict[str, Any]]
     final_decision: Optional[Dict[str, Any]]
@@ -137,6 +142,10 @@ def create_initial_state(
         research_completed=None,
         research_timestamp=None,
         research_error=None,
+        
+        research_risk_assessment=None,
+        research_jurisdictions=None,
+        research_compliance_patterns=None,
         
         validation_analysis=None,
         final_decision=None,
