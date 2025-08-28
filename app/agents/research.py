@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
-from ..prompts.templates import RESEARCH_PROMPT
+from .prompts.templates import RESEARCH_PROMPT
 from typing import Dict, Any, List
 from datetime import datetime
 import json

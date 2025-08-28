@@ -1,11 +1,11 @@
 from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
-from ..prompts.templates import SCREENING_PROMPT
+from .prompts.templates import SCREENING_PROMPT
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
 
-
+# Ensure output data matches this data type
 class ScreeningOutput(BaseModel):
     agent: str = Field(description="Agent name", default="ScreeningAgent")
     risk_level: str = Field(description="Risk level: LOW, MEDIUM, HIGH")
@@ -18,7 +18,7 @@ class ScreeningOutput(BaseModel):
     age_sensitivity: bool = Field(description="Whether feature affects minors")
     data_sensitivity: str = Field(description="Data sensitivity level")
 
-
+# Agent initialisation
 class ScreeningAgent(BaseComplianceAgent):
     """First agent - analyzes features for compliance indicators"""
     
