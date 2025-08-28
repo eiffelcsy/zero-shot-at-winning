@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from chroma.chroma_connection import get_chroma_collection
 from pydantic import BaseModel
 from typing import Optional
 

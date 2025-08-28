@@ -5,10 +5,11 @@ from datetime import datetime
 
 from .prompts.templates import build_research_prompt
 from .base import BaseComplianceAgent
-from app.rag.ingestion.vector_storage import VectorStorage
-from app.rag.retrieval.query_processor import QueryProcessor
-from app.rag.retrieval.retriever import RAGRetriever
-
+from langgraph.graph import END
+from rag.retrieval.query_processor import QueryProcessor
+from rag.retrieval.retriever import RAGRetriever
+from rag.tools.retrieval_tool import RetrievalTool
+from chroma.chroma_connection import get_chroma_client, get_chroma_collection
 
 class ResearchOutput(BaseModel):
     agent: str
@@ -22,22 +23,24 @@ class ResearchAgent(BaseComplianceAgent):
 
     def __init__(self, 
                 embedding_model: str = "text-embedding-3-large",
-                collection_name: str = "regulation_kb", 
                 memory_overlay: str = ""):
         super().__init__("ResearchAgent")
         self.memory_overlay = memory_overlay
         
         # Initialize RAG components
-        self.vector_storage = VectorStorage(
-            embedding_model=embedding_model,
-            collection_name=collection_name
-        )
-        
-        # Initialize query processor (can be None for testing)
+        self.client = get_chroma_client()
+        self.collection = get_chroma_collection(self.client)
+
+        # Initialize query processor and retriever for the retrieval tool
         self.query_processor = QueryProcessor(llm=self.llm if hasattr(self, 'llm') else None)
+        self.retriever = RAGRetriever(self.collection)
         
-        # Initialize retriever with ChromaDB collection
-        self.retriever = RAGRetriever(self.vector_storage.collection)
+        # Initialize the retrieval tool
+        self.retrieval_tool = RetrievalTool(
+            query_processor=self.query_processor,
+            retriever=self.retriever,
+            embedding_model=embedding_model
+        )
         
         # Setup LangChain components
         self._setup_chain()
@@ -64,8 +67,6 @@ class ResearchAgent(BaseComplianceAgent):
             # Extract key parameters from screening
             geographic_scope = screening_analysis.get("geographic_scope", [])
             trigger_keywords = screening_analysis.get("trigger_keywords", [])
-            age_sensitivity = screening_analysis.get("age_sensitivity", False)
-            data_sensitivity = screening_analysis.get("data_sensitivity", "none")
             feature_description = state.get("feature_description", "")
 
             # Step 1: Build search query from screening results
@@ -73,13 +74,18 @@ class ResearchAgent(BaseComplianceAgent):
                 feature_description, screening_analysis, trigger_keywords
             )
 
-            # Step 2: Expand query using QueryProcessor (if available)
-            expanded_query = await self._expand_query(base_query)
+            # Step 2: Build metadata filter for geographic scope
+            metadata_filter = self._build_metadata_filter(geographic_scope)
 
-            # Step 3: Retrieve relevant documents using RAG
-            retrieved_documents = await self._retrieve_documents(
-                expanded_query, geographic_scope, data_sensitivity
+            # Step 3: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
+            retrieved_documents = await self.retrieval_tool._arun(
+                query=base_query,
+                n_results=15,
+                metadata_filter=metadata_filter
             )
+            
+            # Get the enhanced query for logging purposes
+            expanded_query = await self.retrieval_tool._enhance_query(base_query)
 
             # Step 4: Extract candidates and evidence from retrieved docs
             candidates = self._extract_candidates(retrieved_documents)
@@ -114,7 +120,7 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_analysis": result,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": "validation"
+                "next_step": END
             }
 
         except Exception as e:
@@ -146,44 +152,15 @@ class ResearchAgent(BaseComplianceAgent):
             query_parts.extend(trigger_keywords)
         
         return " ".join(query_parts)
+    
+    def _build_metadata_filter(self, geographic_scope: List[str]) -> Dict[str, Any]:
+        """Build metadata filter for geographic scope filtering"""
+        metadata_filter = {}
+        if geographic_scope and geographic_scope != ["unknown"]:
+            # Filter by jurisdiction if available in metadata
+            metadata_filter = {"geo_jurisdiction": {"$in": geographic_scope}}
+        return metadata_filter if metadata_filter else None
 
-    async def _expand_query(self, base_query: str) -> str:
-        """Expand query using QueryProcessor if available"""
-        try:
-            if self.query_processor and hasattr(self.query_processor, 'llm') and self.query_processor.llm:
-                expanded = await self.query_processor.expand_query(base_query)
-                return expanded if expanded else base_query
-        except Exception as e:
-            self.logger.warning(f"Query expansion failed: {e}")
-        
-        return base_query
-
-    async def _retrieve_documents(self, query: str, geographic_scope: List[str], 
-                                data_sensitivity: str) -> List[Dict[str, Any]]:
-        """Retrieve documents using RAG retriever"""
-        try:
-            # Generate embedding for query
-            query_embedding = self.vector_storage.embeddings.embed_query(query)
-            
-            # Build metadata filter for geographic scope
-            metadata_filter = {}
-            if geographic_scope and geographic_scope != ["unknown"]:
-                # Filter by jurisdiction if available in metadata
-                metadata_filter = {"geo_jurisdiction": {"$in": geographic_scope}}
-            
-            # Retrieve documents with or without filtering
-            if metadata_filter:
-                documents = self.retriever.retrieve_with_metadata_filter(
-                    query_embedding, metadata_filter, n_results=15
-                )
-            else:
-                documents = self.retriever.retrieve(query_embedding, n_results=15)
-            
-            return documents
-            
-        except Exception as e:
-            self.logger.error(f"Document retrieval failed: {e}")
-            return []
 
     def _extract_candidates(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract regulation candidates from retrieved documents"""

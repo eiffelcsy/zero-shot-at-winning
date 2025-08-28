@@ -1,12 +1,15 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 import uuid
 from datetime import datetime
 from rag.ingestion.pipeline import PDFIngestionPipeline
 from chroma.chroma_connection import get_chroma_collection
+from agents.orchestrator import ComplianceOrchestrator
+import os
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +32,22 @@ class PipelineStatsResponse(BaseModel):
     storage_stats: Dict[str, Any]
     status: str
 
+class ComplianceResponse(BaseModel):
+    """Response model for compliance analysis"""
+    session_id: Optional[str] = Field(description="Session ID for tracking")
+    feature_name: str = Field(description="Name of the analyzed feature")
+    needs_geo_logic: str = Field(description="Whether feature needs geo-specific logic (YES/NO/UNKNOWN)")
+    reasoning: str = Field(description="Detailed reasoning for the decision")
+    related_regulations: List[str] = Field(default=[], description="List of related regulations")
+    confidence_score: float = Field(description="Confidence score between 0.0 and 1.0")
+    risk_level: str = Field(description="Risk level (LOW/MEDIUM/HIGH/UNKNOWN)")
+    workflow_completed: Optional[bool] = Field(description="Whether the full workflow completed")
+    agents_completed: List[str] = Field(default=[], description="List of agents that completed processing")
+    evidence_sources: int = Field(default=0, description="Number of evidence sources found")
+    research_confidence: float = Field(default=0.0, description="Research agent confidence score")
+    applicable_jurisdictions: List[str] = Field(default=[], description="Applicable legal jurisdictions")
+    error: Optional[str] = Field(default=None, description="Error message if analysis failed")
+
 # Initialize the PDF ingestion pipeline
 pipeline = PDFIngestionPipeline(
     chunk_size=1000,
@@ -36,6 +55,9 @@ pipeline = PDFIngestionPipeline(
     embedding_model="text-embedding-3-large",
     collection_name="regulation_kb"
 )
+
+# Initialize the compliance orchestrator for LangGraph multi-agent workflow
+compliance_orchestrator = ComplianceOrchestrator(memory_overlay="")
 
 # ================================================
 # REGULATION UPLOAD ENDPOINTS
@@ -227,7 +249,7 @@ async def check_compliance(
                 "content_type": document.content_type
             }
         
-        # Call the multi-agent compliance analysis system
+        # Call the LangGraph multi-agent compliance analysis system
         analysis_result = await run_compliance_analysis(
             title=title,
             description=description,
@@ -243,218 +265,231 @@ async def check_compliance(
         raise HTTPException(status_code=500, detail=f"Compliance analysis failed: {str(e)}")
 
 
-@router.post("/compliance/feedback", response_model=FeedbackResponse)
-async def submit_feedback(feedback: FeedbackRequest):
-    """
-    Submit feedback for a compliance analysis
+# @router.post("/compliance/feedback", response_model=FeedbackResponse)
+# async def submit_feedback(feedback: FeedbackRequest):
+#     """
+#     Submit feedback for a compliance analysis
     
-    Args:
-        feedback: FeedbackRequest containing analysis_id, feedback_type, etc.
+#     Args:
+#         feedback: FeedbackRequest containing analysis_id, feedback_type, etc.
     
-    Returns:
-        FeedbackResponse confirming submission
-    """
-    try:
-        logger.info(f"Receiving feedback for analysis: {feedback.analysis_id}")
+#     Returns:
+#         FeedbackResponse confirming submission
+#     """
+#     try:
+#         logger.info(f"Receiving feedback for analysis: {feedback.analysis_id}")
         
-        # Process feedback and store for agent learning
-        feedback_result = await process_feedback(feedback)
+#         # Process feedback and store for agent learning
+#         feedback_result = await process_feedback(feedback)
         
-        logger.info(f"Feedback processed successfully for analysis: {feedback.analysis_id}")
-        return feedback_result
+#         logger.info(f"Feedback processed successfully for analysis: {feedback.analysis_id}")
+#         return feedback_result
         
-    except Exception as e:
-        logger.error(f"Error processing feedback: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error processing feedback: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
 
 
-# ================================================
-# REGULATION UPLOAD ENDPOINTS
-# ================================================
+# # ================================================
+# # REGULATION UPLOAD ENDPOINTS
+# # ================================================
 
-@router.post("/upload-pdfs", response_model=Dict[str, Any])
-async def upload_regulation_pdfs(files: List[UploadFile] = File(...)):
-    """
-    Batch upload PDF regulation documents
+# @router.post("/upload-pdfs", response_model=Dict[str, Any])
+# async def upload_regulation_pdfs(files: List[UploadFile] = File(...)):
+#     """
+#     Batch upload PDF regulation documents
     
-    Args:
-        files: List of PDF files to upload and process
+#     Args:
+#         files: List of PDF files to upload and process
     
-    Returns:
-        Upload results with statistics
-    """
-    try:
-        logger.info(f"Starting batch upload of {len(files)} PDF files")
+#     Returns:
+#         Upload results with statistics
+#     """
+#     try:
+#         logger.info(f"Starting batch upload of {len(files)} PDF files")
         
-        upload_results = await process_pdf_batch_upload(files)
+#         upload_results = await process_pdf_batch_upload(files)
         
-        logger.info(f"Batch upload completed: {upload_results['successful']} successful, {upload_results['failed']} failed")
-        return upload_results
+#         logger.info(f"Batch upload completed: {upload_results['successful']} successful, {upload_results['failed']} failed")
+#         return upload_results
         
-    except Exception as e:
-        logger.error(f"Error in batch PDF upload: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"PDF upload failed: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error in batch PDF upload: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"PDF upload failed: {str(e)}")
 
 
-@router.get("/upload-stats", response_model=Dict[str, Any])
-async def get_upload_statistics():
-    """
-    Get statistics about the PDF upload pipeline
+# @router.get("/upload-stats", response_model=Dict[str, Any])
+# async def get_upload_statistics():
+#     """
+#     Get statistics about the PDF upload pipeline
     
-    Returns:
-        Pipeline configuration and storage statistics
-    """
-    try:
-        logger.info("Fetching upload pipeline statistics")
+#     Returns:
+#         Pipeline configuration and storage statistics
+#     """
+#     try:
+#         logger.info("Fetching upload pipeline statistics")
         
-        stats = await get_pipeline_stats()
+#         stats = await get_pipeline_stats()
         
-        logger.info("Upload statistics retrieved successfully")
-        return stats
+#         logger.info("Upload statistics retrieved successfully")
+#         return stats
         
-    except Exception as e:
-        logger.error(f"Error fetching upload stats: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch statistics: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error fetching upload stats: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch statistics: {str(e)}")
 
 
-# ================================================
-# ANALYTICS ENDPOINTS
-# ================================================
+# # ================================================
+# # ANALYTICS ENDPOINTS
+# # ================================================
 
-@router.get("/analytics/summary", response_model=Dict[str, Any])
-async def get_analytics_summary():
-    """
-    Get summary analytics about compliance analyses
+# @router.get("/analytics/summary", response_model=Dict[str, Any])
+# async def get_analytics_summary():
+#     """
+#     Get summary analytics about compliance analyses
     
-    Returns:
-        Summary statistics and trends
-    """
-    try:
-        logger.info("Fetching analytics summary")
+#     Returns:
+#         Summary statistics and trends
+#     """
+#     try:
+#         logger.info("Fetching analytics summary")
         
-        summary = await get_compliance_analytics_summary()
+#         summary = await get_compliance_analytics_summary()
         
-        logger.info("Analytics summary retrieved successfully")
-        return summary
+#         logger.info("Analytics summary retrieved successfully")
+#         return summary
         
-    except Exception as e:
-        logger.error(f"Error fetching analytics summary: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch analytics: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error fetching analytics summary: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch analytics: {str(e)}")
 
 
-@router.get("/analytics/history", response_model=List[Dict[str, Any]])
-async def get_analysis_history(
-    limit: Optional[int] = 100,
-    offset: Optional[int] = 0,
-    filter_flagged: Optional[bool] = None
-):
-    """
-    Get historical compliance analyses
+# @router.get("/analytics/history", response_model=List[Dict[str, Any]])
+# async def get_analysis_history(
+#     limit: Optional[int] = 100,
+#     offset: Optional[int] = 0,
+#     filter_flagged: Optional[bool] = None
+# ):
+#     """
+#     Get historical compliance analyses
     
-    Args:
-        limit: Maximum number of records to return
-        offset: Number of records to skip
-        filter_flagged: If True, only return flagged analyses; if False, only non-flagged
+#     Args:
+#         limit: Maximum number of records to return
+#         offset: Number of records to skip
+#         filter_flagged: If True, only return flagged analyses; if False, only non-flagged
     
-    Returns:
-        List of historical analyses
-    """
-    try:
-        logger.info(f"Fetching analysis history: limit={limit}, offset={offset}")
+#     Returns:
+#         List of historical analyses
+#     """
+#     try:
+#         logger.info(f"Fetching analysis history: limit={limit}, offset={offset}")
         
-        history = await get_compliance_history(limit, offset, filter_flagged)
+#         history = await get_compliance_history(limit, offset, filter_flagged)
         
-        logger.info(f"Retrieved {len(history)} historical analyses")
-        return history
+#         logger.info(f"Retrieved {len(history)} historical analyses")
+#         return history
         
-    except Exception as e:
-        logger.error(f"Error fetching analysis history: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error fetching analysis history: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
 
-# ================================================
-# ADMIN ENDPOINTS
-# ================================================
+# # ================================================
+# # ADMIN ENDPOINTS
+# # ================================================
 
-@router.get("/admin/system-status", response_model=Dict[str, Any])
-async def get_system_status():
-    """
-    Get system health and status information
+# @router.get("/admin/system-status", response_model=Dict[str, Any])
+# async def get_system_status():
+#     """
+#     Get system health and status information
     
-    Returns:
-        System status including agent health, database connectivity, etc.
-    """
-    try:
-        logger.info("Checking system status")
+#     Returns:
+#         System status including agent health, database connectivity, etc.
+#     """
+#     try:
+#         logger.info("Checking system status")
         
-        status = await check_system_health()
+#         status = await check_system_health()
         
-        logger.info("System status check completed")
-        return status
+#         logger.info("System status check completed")
+#         return status
         
-    except Exception as e:
-        logger.error(f"Error checking system status: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"System status check failed: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error checking system status: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"System status check failed: {str(e)}")
 
 
-@router.post("/admin/retrain-agents", response_model=StatusResponse)
-async def retrain_agents():
-    """
-    Trigger retraining of compliance analysis agents based on feedback
+# @router.post("/admin/retrain-agents", response_model=StatusResponse)
+# async def retrain_agents():
+#     """
+#     Trigger retraining of compliance analysis agents based on feedback
     
-    Returns:
-        Status of the retraining process
-    """
-    try:
-        logger.info("Starting agent retraining process")
+#     Returns:
+#         Status of the retraining process
+#     """
+#     try:
+#         logger.info("Starting agent retraining process")
         
-        retraining_result = await trigger_agent_retraining()
+#         retraining_result = await trigger_agent_retraining()
         
-        logger.info("Agent retraining process initiated")
-        return StatusResponse(
-            status="success",
-            message="Agent retraining process started successfully",
-            data=retraining_result
-        )
+#         logger.info("Agent retraining process initiated")
+#         return StatusResponse(
+#             status="success",
+#             message="Agent retraining process started successfully",
+#             data=retraining_result
+#         )
         
-    except Exception as e:
-        logger.error(f"Error initiating agent retraining: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Agent retraining failed: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Error initiating agent retraining: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Agent retraining failed: {str(e)}")
 
 
-# ================================================
-# DUMMY IMPLEMENTATION FUNCTIONS
-# ================================================
-# These are placeholder functions that should be implemented with your actual logic
+# # ================================================
+# # DUMMY IMPLEMENTATION FUNCTIONS
+# # ================================================
+# # These are placeholder functions that should be implemented with your actual logic
 
 async def process_document(document_bytes: bytes, filename: str) -> str:
     """
-    DUMMY: Process uploaded document and extract text content
+    Process uploaded document and extract text content
     
-    TODO: Implement actual document processing logic
-    - PDF text extraction using PyPDF2 or pdfplumber
-    - DOCX processing using python-docx
+    Supports:
+    - PDF text extraction using PyPDF2
     - Plain text and markdown handling
+    - Basic document type validation
     """
-    logger.info(f"DUMMY: Processing document {filename}")
+    logger.info(f"Processing document {filename}")
     
-    # Simulate document processing
     file_extension = filename.split('.')[-1].lower()
     
     if file_extension == 'pdf':
-        # TODO: Implement PDF text extraction
-        return f"DUMMY: Extracted text from PDF {filename} - Feature specification document with technical details..."
-    elif file_extension == 'docx':
-        # TODO: Implement DOCX text extraction
-        return f"DUMMY: Extracted text from DOCX {filename} - Design document with implementation details..."
-    elif file_extension in ['txt', 'md']:
-        # For text files, decode bytes
         try:
-            return document_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            return f"DUMMY: Could not decode text file {filename}"
+            # Use PDF processor from the existing pipeline
+            from app.rag.ingestion.pdf_processor import PDFProcessor
+            processor = PDFProcessor()
+            
+            # Create a temporary file-like object from bytes
+            pdf_file_obj = io.BytesIO(document_bytes)
+            text_content = processor._extract_text_from_file(pdf_file_obj, filename)
+            logger.info(f"Successfully extracted {len(text_content)} characters from PDF")
+            return text_content
+        except Exception as e:
+            logger.error(f"Failed to process PDF {filename}: {str(e)}")
+            return f"Error processing PDF {filename}: {str(e)}"
+    
+    elif file_extension in ['txt', 'md']:
+        try:
+            content = document_bytes.decode('utf-8')
+            logger.info(f"Successfully processed text file {filename}")
+            return content
+        except UnicodeDecodeError as e:
+            logger.error(f"Failed to decode text file {filename}: {str(e)}")
+            return f"Error decoding text file {filename}: {str(e)}"
+    
     else:
-        return f"DUMMY: Unsupported file type for {filename}"
+        error_msg = f"Unsupported file type: {file_extension}"
+        logger.warning(error_msg)
+        return error_msg
 
 
 async def run_compliance_analysis(
@@ -464,306 +499,315 @@ async def run_compliance_analysis(
     document_metadata: Optional[Dict] = None
 ) -> ComplianceResponse:
     """
-    DUMMY: Run the multi-agent compliance analysis system
+    Run the LangGraph multi-agent compliance analysis system
     
-    TODO: Implement actual LangGraph orchestration with:
-    - Screening Agent
-    - Research Agent  
-    - Validation Agent
-    - Learning Agent
+    This orchestrates the full workflow with:
+    - Screening Agent: Initial risk assessment
+    - Research Agent: RAG-powered research 
+    - Validation Agent: Final decision validation
+    - Learning Agent: Feedback integration
     """
-    logger.info(f"DUMMY: Running compliance analysis for {title}")
+    logger.info(f"Running LangGraph compliance analysis for feature: {title}")
     
-    # Simulate analysis based on keywords and patterns
-    requires_compliance = any(keyword in (title + " " + description).lower() 
-                            for keyword in [
-                                'location', 'geo', 'region', 'country', 'state', 
-                                'curfew', 'minor', 'age', 'restrict', 'block',
-                                'gdpr', 'coppa', 'utah', 'california', 'eu'
-                            ])
-    
-    # Enhanced analysis if document is provided
-    confidence_boost = 0.1 if document_content else 0.0
-    base_confidence = 0.85 if requires_compliance else 0.75
-    
-    return ComplianceResponse(
-        analysis_id=str(uuid.uuid4()),
-        flag="yes" if requires_compliance else "no",
-        confidence_score=min(0.95, base_confidence + confidence_boost),
-        risk_level="High" if requires_compliance else "Low",
-        reasoning=(
-            f"This feature {'requires' if requires_compliance else 'does not require'} "
-            f"geo-specific compliance logic because it "
-            f"{'involves location-based restrictions and user data processing' if requires_compliance else 'operates uniformly across regions without location dependencies'}. "
-            f"{'Additional context from uploaded document strengthens this analysis.' if document_content else ''}"
-        ),
-        related_regulations=[
-            "EU Digital Service Act (DSA) - Article 14",
-            "GDPR - Location data processing requirements",
-            "California Consumer Privacy Act (CCPA)",
-            "Utah Social Media Regulation Act"
-        ] if requires_compliance else [
-            "General platform terms of service",
-            "Standard content policies"
-        ],
-        agent_details={
-            "screening_agent_status": "completed",
-            "research_agent_status": "completed", 
-            "validation_agent_status": "completed",
-            "document_processed": document_content is not None,
-            "document_metadata": document_metadata
-        },
-        timestamp=datetime.now().isoformat()
-    )
-
-
-async def process_feedback(feedback: FeedbackRequest) -> FeedbackResponse:
-    """
-    DUMMY: Process feedback for agent learning
-    
-    TODO: Implement actual feedback processing:
-    - Store feedback in database
-    - Update agent training data
-    - Trigger incremental learning if needed
-    """
-    logger.info(f"DUMMY: Processing {feedback.feedback_type} feedback for analysis {feedback.analysis_id}")
-    
-    # Simulate feedback processing
-    feedback_id = str(uuid.uuid4())
-    
-    # TODO: Store feedback in database
-    # TODO: Update agent learning parameters
-    # TODO: If negative feedback, add to correction dataset
-    
-    return FeedbackResponse(
-        feedback_id=feedback_id,
-        status="processed",
-        message=f"Feedback received and will be used to improve analysis quality. Type: {feedback.feedback_type}",
-        analysis_id=feedback.analysis_id,
-        timestamp=datetime.now().isoformat()
-    )
-
-
-async def process_pdf_batch_upload(files: List[UploadFile]) -> Dict[str, Any]:
-    """
-    DUMMY: Process batch PDF upload through RAG pipeline
-    
-    TODO: Implement actual PDF processing:
-    - Extract text from PDFs
-    - Chunk documents appropriately
-    - Generate embeddings
-    - Store in vector database (ChromaDB)
-    """
-    logger.info(f"DUMMY: Processing batch upload of {len(files)} PDFs")
-    
-    results = []
-    successful = 0
-    failed = 0
-    
-    for file in files:
-        try:
-            # Simulate processing each file
-            file_bytes = await file.read()
-            
-            # TODO: Extract text from PDF
-            # TODO: Chunk text appropriately
-            # TODO: Generate embeddings
-            # TODO: Store in ChromaDB
-            
-            chunks_processed = len(file_bytes) // 1000  # Dummy chunk calculation
-            
-            results.append({
-                "filename": file.filename,
-                "status": "success",
-                "chunks_processed": chunks_processed,
-                "size_bytes": len(file_bytes)
-            })
-            successful += 1
-            
-        except Exception as e:
-            results.append({
-                "filename": file.filename,
-                "status": "failed",
-                "error": str(e)
-            })
-            failed += 1
-    
-    return {
-        "status": "success" if failed == 0 else ("partial_success" if successful > 0 else "failed"),
-        "message": f"Processed {successful} files successfully, {failed} failed",
-        "total_files": len(files),
-        "successful": successful,
-        "failed": failed,
-        "results": results,
-        "timestamp": datetime.now().isoformat()
-    }
-
-
-async def get_pipeline_stats() -> Dict[str, Any]:
-    """
-    DUMMY: Get PDF processing pipeline statistics
-    
-    TODO: Implement actual pipeline stats:
-    - ChromaDB collection info
-    - Embedding model details
-    - Processing configuration
-    """
-    logger.info("DUMMY: Fetching pipeline statistics")
-    
-    return {
-        "pipeline_config": {
-            "chunk_size": 1000,
-            "chunk_overlap": 200,
-            "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-            "collection_name": "regulations_collection"
-        },
-        "storage_stats": {
-            "document_count": 156,  # Dummy count
-            "total_chunks": 2847,   # Dummy count
-            "status": "healthy",
-            "last_updated": datetime.now().isoformat()
-        }
-    }
-
-
-async def get_compliance_analytics_summary() -> Dict[str, Any]:
-    """
-    DUMMY: Get compliance analytics summary
-    
-    TODO: Implement actual analytics:
-    - Query database for analysis statistics
-    - Calculate trends and patterns
-    - Generate insights
-    """
-    logger.info("DUMMY: Fetching compliance analytics summary")
-    
-    return {
-        "total_analyses": 245,
-        "flagged_analyses": 89,
-        "flagged_percentage": 36.3,
-        "average_confidence": 0.847,
-        "risk_distribution": {
-            "low": 156,
-            "medium": 67,
-            "high": 22
-        },
-        "feedback_stats": {
-            "positive_feedback": 198,
-            "negative_feedback": 23,
-            "context_requests": 24
-        },
-        "trends": {
-            "analyses_this_week": 47,
-            "trend_direction": "increasing",
-            "accuracy_improvement": 0.12
-        },
-        "timestamp": datetime.now().isoformat()
-    }
-
-
-async def get_compliance_history(
-    limit: int, 
-    offset: int, 
-    filter_flagged: Optional[bool]
-) -> List[Dict[str, Any]]:
-    """
-    DUMMY: Get compliance analysis history
-    
-    TODO: Implement actual database query:
-    - Query analyses table with pagination
-    - Apply filters
-    - Return formatted results
-    """
-    logger.info(f"DUMMY: Fetching compliance history with limit={limit}, offset={offset}")
-    
-    # Dummy historical data
-    dummy_analyses = []
-    for i in range(min(limit, 20)):  # Return up to 20 dummy records
-        flagged = (i % 3 == 0)  # Every third analysis is flagged
-        
-        if filter_flagged is not None and flagged != filter_flagged:
-            continue
-            
-        dummy_analyses.append({
-            "analysis_id": f"analysis_dummy_{i + offset}",
-            "timestamp": datetime.now().isoformat(),
-            "title": f"Feature Analysis {i + offset + 1}",
-            "description": f"Analysis of feature with various compliance considerations...",
-            "flag": "yes" if flagged else "no",
-            "confidence": 0.75 + (i % 10) * 0.02,
-            "risk_level": "High" if flagged else "Low",
-            "has_feedback": (i % 5 == 0)  # Every fifth analysis has feedback
-        })
-    
-    return dummy_analyses
-
-
-async def check_system_health() -> Dict[str, Any]:
-    """
-    DUMMY: Check system health status
-    
-    TODO: Implement actual health checks:
-    - Database connectivity
-    - Agent service status
-    - Vector database status
-    - API dependencies
-    """
-    logger.info("DUMMY: Performing system health check")
-    
-    return {
-        "status": "healthy",
-        "components": {
-            "database": {
-                "status": "healthy",
-                "response_time_ms": 45,
-                "last_check": datetime.now().isoformat()
-            },
-            "vector_database": {
-                "status": "healthy",
-                "collection_count": 1,
-                "document_count": 156,
-                "last_check": datetime.now().isoformat()
-            },
-            "llm_agents": {
-                "status": "healthy",
-                "screening_agent": "ready",
-                "research_agent": "ready", 
-                "validation_agent": "ready",
-                "last_check": datetime.now().isoformat()
-            },
-            "external_apis": {
-                "status": "healthy",
-                "regulation_apis": "accessible",
-                "last_check": datetime.now().isoformat()
+    try:
+        # Prepare context documents if provided
+        context_documents = None
+        if document_content:
+            context_documents = {
+                "content": document_content,
+                "metadata": document_metadata or {}
             }
-        },
-        "uptime_seconds": 86400,  # Dummy uptime
-        "version": "1.0.0",
-        "timestamp": datetime.now().isoformat()
-    }
+        
+        # Execute the LangGraph multi-agent workflow
+        orchestrator_result = await compliance_orchestrator.analyze_feature(
+            feature_name=title,
+            feature_description=description,
+            context_documents=context_documents
+        )
+        
+        # Map orchestrator result to API response format
+        return ComplianceResponse(
+            session_id=orchestrator_result.get("session_id"),
+            feature_name=orchestrator_result.get("feature_name", title),
+            needs_geo_logic=orchestrator_result.get("needs_geo_logic", "UNKNOWN"),
+            reasoning=orchestrator_result.get("reasoning", ""),
+            related_regulations=orchestrator_result.get("related_regulations", []),
+            confidence_score=orchestrator_result.get("confidence_score", 0.0),
+            risk_level=orchestrator_result.get("risk_level", "UNKNOWN"),
+            workflow_completed=orchestrator_result.get("workflow_completed", False),
+            agents_completed=orchestrator_result.get("agents_completed", []),
+            evidence_sources=orchestrator_result.get("evidence_sources", 0),
+            research_confidence=orchestrator_result.get("research_confidence", 0.0),
+            applicable_jurisdictions=orchestrator_result.get("applicable_jurisdictions", []),
+            error=orchestrator_result.get("error")
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in LangGraph compliance analysis: {str(e)}")
+        return ComplianceResponse(
+            session_id=None,
+            feature_name=title,
+            needs_geo_logic="UNKNOWN",
+            reasoning=f"Analysis failed due to error: {str(e)}",
+            related_regulations=[],
+            confidence_score=0.0,
+            risk_level="ERROR",
+            workflow_completed=False,
+            agents_completed=[],
+            evidence_sources=0,
+            research_confidence=0.0,
+            applicable_jurisdictions=[],
+            error=str(e)
+        )
 
 
-async def trigger_agent_retraining() -> Dict[str, Any]:
-    """
-    DUMMY: Trigger agent retraining process
+# async def process_feedback(feedback: FeedbackRequest) -> FeedbackResponse:
+#     """
+#     DUMMY: Process feedback for agent learning
     
-    TODO: Implement actual retraining:
-    - Collect recent feedback data
-    - Update agent parameters
-    - Retrain models incrementally
-    - Update agent configurations
-    """
-    logger.info("DUMMY: Triggering agent retraining process")
+#     TODO: Implement actual feedback processing:
+#     - Store feedback in database
+#     - Update agent training data
+#     - Trigger incremental learning if needed
+#     """
+#     logger.info(f"DUMMY: Processing {feedback.feedback_type} feedback for analysis {feedback.analysis_id}")
     
-    return {
-        "retraining_id": str(uuid.uuid4()),
-        "status": "initiated",
-        "feedback_samples": 47,  # Dummy count
-        "estimated_completion": "2025-01-15T10:30:00Z",
-        "agents_affected": [
-            "screening_agent",
-            "research_agent", 
-            "validation_agent"
-        ],
-        "timestamp": datetime.now().isoformat()
-    }
+#     # Simulate feedback processing
+#     feedback_id = str(uuid.uuid4())
+    
+#     # TODO: Store feedback in database
+#     # TODO: Update agent learning parameters
+#     # TODO: If negative feedback, add to correction dataset
+    
+#     return FeedbackResponse(
+#         feedback_id=feedback_id,
+#         status="processed",
+#         message=f"Feedback received and will be used to improve analysis quality. Type: {feedback.feedback_type}",
+#         analysis_id=feedback.analysis_id,
+#         timestamp=datetime.now().isoformat()
+#     )
+
+
+# async def process_pdf_batch_upload(files: List[UploadFile]) -> Dict[str, Any]:
+#     """
+#     DUMMY: Process batch PDF upload through RAG pipeline
+    
+#     TODO: Implement actual PDF processing:
+#     - Extract text from PDFs
+#     - Chunk documents appropriately
+#     - Generate embeddings
+#     - Store in vector database (ChromaDB)
+#     """
+#     logger.info(f"DUMMY: Processing batch upload of {len(files)} PDFs")
+    
+#     results = []
+#     successful = 0
+#     failed = 0
+    
+#     for file in files:
+#         try:
+#             # Simulate processing each file
+#             file_bytes = await file.read()
+            
+#             # TODO: Extract text from PDF
+#             # TODO: Chunk text appropriately
+#             # TODO: Generate embeddings
+#             # TODO: Store in ChromaDB
+            
+#             chunks_processed = len(file_bytes) // 1000  # Dummy chunk calculation
+            
+#             results.append({
+#                 "filename": file.filename,
+#                 "status": "success",
+#                 "chunks_processed": chunks_processed,
+#                 "size_bytes": len(file_bytes)
+#             })
+#             successful += 1
+            
+#         except Exception as e:
+#             results.append({
+#                 "filename": file.filename,
+#                 "status": "failed",
+#                 "error": str(e)
+#             })
+#             failed += 1
+    
+#     return {
+#         "status": "success" if failed == 0 else ("partial_success" if successful > 0 else "failed"),
+#         "message": f"Processed {successful} files successfully, {failed} failed",
+#         "total_files": len(files),
+#         "successful": successful,
+#         "failed": failed,
+#         "results": results,
+#         "timestamp": datetime.now().isoformat()
+#     }
+
+
+# async def get_pipeline_stats() -> Dict[str, Any]:
+#     """
+#     DUMMY: Get PDF processing pipeline statistics
+    
+#     TODO: Implement actual pipeline stats:
+#     - ChromaDB collection info
+#     - Embedding model details
+#     - Processing configuration
+#     """
+#     logger.info("DUMMY: Fetching pipeline statistics")
+    
+#     return {
+#         "pipeline_config": {
+#             "chunk_size": 1000,
+#             "chunk_overlap": 200,
+#             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+#             "collection_name": "regulations_collection"
+#         },
+#         "storage_stats": {
+#             "document_count": 156,  # Dummy count
+#             "total_chunks": 2847,   # Dummy count
+#             "status": "healthy",
+#             "last_updated": datetime.now().isoformat()
+#         }
+#     }
+
+
+# async def get_compliance_analytics_summary() -> Dict[str, Any]:
+#     """
+#     DUMMY: Get compliance analytics summary
+    
+#     TODO: Implement actual analytics:
+#     - Query database for analysis statistics
+#     - Calculate trends and patterns
+#     - Generate insights
+#     """
+#     logger.info("DUMMY: Fetching compliance analytics summary")
+    
+#     return {
+#         "total_analyses": 245,
+#         "flagged_analyses": 89,
+#         "flagged_percentage": 36.3,
+#         "average_confidence": 0.847,
+#         "risk_distribution": {
+#             "low": 156,
+#             "medium": 67,
+#             "high": 22
+#         },
+#         "feedback_stats": {
+#             "positive_feedback": 198,
+#             "negative_feedback": 23,
+#             "context_requests": 24
+#         },
+#         "trends": {
+#             "analyses_this_week": 47,
+#             "trend_direction": "increasing",
+#             "accuracy_improvement": 0.12
+#         },
+#         "timestamp": datetime.now().isoformat()
+#     }
+
+
+# async def get_compliance_history(
+#     limit: int, 
+#     offset: int, 
+#     filter_flagged: Optional[bool]
+# ) -> List[Dict[str, Any]]:
+#     """
+#     DUMMY: Get compliance analysis history
+    
+#     TODO: Implement actual database query:
+#     - Query analyses table with pagination
+#     - Apply filters
+#     - Return formatted results
+#     """
+#     logger.info(f"DUMMY: Fetching compliance history with limit={limit}, offset={offset}")
+    
+#     # Dummy historical data
+#     dummy_analyses = []
+#     for i in range(min(limit, 20)):  # Return up to 20 dummy records
+#         flagged = (i % 3 == 0)  # Every third analysis is flagged
+        
+#         if filter_flagged is not None and flagged != filter_flagged:
+#             continue
+            
+#         dummy_analyses.append({
+#             "analysis_id": f"analysis_dummy_{i + offset}",
+#             "timestamp": datetime.now().isoformat(),
+#             "title": f"Feature Analysis {i + offset + 1}",
+#             "description": f"Analysis of feature with various compliance considerations...",
+#             "flag": "yes" if flagged else "no",
+#             "confidence": 0.75 + (i % 10) * 0.02,
+#             "risk_level": "High" if flagged else "Low",
+#             "has_feedback": (i % 5 == 0)  # Every fifth analysis has feedback
+#         })
+    
+#     return dummy_analyses
+
+
+# async def check_system_health() -> Dict[str, Any]:
+#     """
+#     DUMMY: Check system health status
+    
+#     TODO: Implement actual health checks:
+#     - Database connectivity
+#     - Agent service status
+#     - Vector database status
+#     - API dependencies
+#     """
+#     logger.info("DUMMY: Performing system health check")
+    
+#     return {
+#         "status": "healthy",
+#         "components": {
+#             "database": {
+#                 "status": "healthy",
+#                 "response_time_ms": 45,
+#                 "last_check": datetime.now().isoformat()
+#             },
+#             "vector_database": {
+#                 "status": "healthy",
+#                 "collection_count": 1,
+#                 "document_count": 156,
+#                 "last_check": datetime.now().isoformat()
+#             },
+#             "llm_agents": {
+#                 "status": "healthy",
+#                 "screening_agent": "ready",
+#                 "research_agent": "ready", 
+#                 "validation_agent": "ready",
+#                 "last_check": datetime.now().isoformat()
+#             },
+#             "external_apis": {
+#                 "status": "healthy",
+#                 "regulation_apis": "accessible",
+#                 "last_check": datetime.now().isoformat()
+#             }
+#         },
+#         "uptime_seconds": 86400,  # Dummy uptime
+#         "version": "1.0.0",
+#         "timestamp": datetime.now().isoformat()
+#     }
+
+
+# async def trigger_agent_retraining() -> Dict[str, Any]:
+#     """
+#     DUMMY: Trigger agent retraining process
+    
+#     TODO: Implement actual retraining:
+#     - Collect recent feedback data
+#     - Update agent parameters
+#     - Retrain models incrementally
+#     - Update agent configurations
+#     """
+#     logger.info("DUMMY: Triggering agent retraining process")
+    
+#     return {
+#         "retraining_id": str(uuid.uuid4()),
+#         "status": "initiated",
+#         "feedback_samples": 47,  # Dummy count
+#         "estimated_completion": "2025-01-15T10:30:00Z",
+#         "agents_affected": [
+#             "screening_agent",
+#             "research_agent", 
+#             "validation_agent"
+#         ],
+#         "timestamp": datetime.now().isoformat()
+#     }

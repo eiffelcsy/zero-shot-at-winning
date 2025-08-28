@@ -1,11 +1,23 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Type
+from langchain_core.tools import BaseTool
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForToolRun,
+    CallbackManagerForToolRun,
+)
 from langchain_openai import OpenAIEmbeddings
-from rag.tools.base_tool import BaseTool
+from pydantic import BaseModel, Field
 from rag.retrieval.query_processor import QueryProcessor
 from rag.retrieval.retriever import RAGRetriever
 
 logger = logging.getLogger(__name__)
+
+
+class RetrievalToolInput(BaseModel):
+    """Input schema for the RetrievalTool."""
+    query: str = Field(description="The search query string to retrieve relevant documents")
+    n_results: Optional[int] = Field(default=5, description="Number of results to retrieve")
+    metadata_filter: Optional[Dict[str, Any]] = Field(default=None, description="Optional metadata filter for retrieval")
 
 
 class RetrievalTool(BaseTool):
@@ -17,8 +29,16 @@ class RetrievalTool(BaseTool):
     processing and synthesis.
     """
     
+    name: str = "retrieval_tool"
+    description: str = "Retrieves relevant documents for downstream synthesis. Combines query enhancement and vector-based document retrieval."
+    args_schema: Type[BaseModel] = RetrievalToolInput
+    
+    query_processor: QueryProcessor = Field(description="QueryProcessor instance for query enhancement")
+    retriever: RAGRetriever = Field(description="RAGRetriever instance for document retrieval")
+    embeddings: Any = Field(default=None, description="OpenAI embeddings instance")
+    
     def __init__(self, query_processor: QueryProcessor, retriever: RAGRetriever, 
-                 embedding_model: str = "text-embedding-3-large"):
+                 embedding_model: str = "text-embedding-3-large", **kwargs):
         """
         Initialize the RetrievalTool.
         
@@ -26,28 +46,61 @@ class RetrievalTool(BaseTool):
             query_processor: QueryProcessor instance for query enhancement
             retriever: RAGRetriever instance for document retrieval
             embedding_model: Optional OpenAI embedding model for generating query embeddings
+            **kwargs: Additional arguments passed to BaseTool
             
         Raises:
             ValueError: If required dependencies are None
         """
-        super().__init__("retrieval_tool")
-        
         if query_processor is None:
             raise ValueError("query_processor is required")
         if retriever is None:
             raise ValueError("retriever is required")
-            
-        self.query_processor = query_processor
-        self.retriever = retriever
-        self.embeddings = OpenAIEmbeddings(model=embedding_model)
+        
+        # Pass the required fields through the parent constructor
+        super().__init__(
+            query_processor=query_processor,
+            retriever=retriever,
+            embeddings=OpenAIEmbeddings(model=embedding_model),
+            **kwargs
+        )
     
-    async def run(self, query: str, **kwargs) -> List[Dict[str, Any]]:
+    def _run(
+        self,
+        query: str,
+        n_results: int = 5,
+        metadata_filter: Optional[Dict[str, Any]] = None,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Synchronous execution of the retrieval workflow.
+        
+        Args:
+            query: The input query string
+            n_results: Number of results to retrieve
+            metadata_filter: Optional metadata filter for retrieval
+            run_manager: Optional callback manager for tool runs
+            
+        Returns:
+            List of raw retrieval result dictionaries from ChromaDB
+        """
+        # Since the original implementation was async, we'll raise an error for sync calls
+        raise NotImplementedError("RetrievalTool only supports async execution. Use async invocation.")
+    
+    async def _arun(
+        self,
+        query: str,
+        n_results: int = 5,
+        metadata_filter: Optional[Dict[str, Any]] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Execute the retrieval workflow: enhance query -> retrieve documents.
         
         Args:
             query: The input query string
-            **kwargs: Additional parameters (e.g., n_results, metadata_filter)
+            n_results: Number of results to retrieve
+            metadata_filter: Optional metadata filter for retrieval
+            run_manager: Optional callback manager for async tool runs
             
         Returns:
             List of raw retrieval result dictionaries from ChromaDB
@@ -61,6 +114,10 @@ class RetrievalTool(BaseTool):
             enhanced_query = await self._enhance_query(query)
             
             # Step 2: Retrieve documents
+            kwargs = {"n_results": n_results}
+            if metadata_filter is not None:
+                kwargs["metadata_filter"] = metadata_filter
+                
             raw_results = await self._retrieve_documents(enhanced_query, **kwargs)
             
             # Return raw results for downstream synthesis
@@ -82,7 +139,7 @@ class RetrievalTool(BaseTool):
             Enhanced query string
         """
         try:
-            return await self.query_processor.enhance_query(query)
+            return await self.query_processor.expand_query(query)
         except Exception as e:
             logger.warning(f"Query enhancement failed, using original query: {e}")
             return query
@@ -139,8 +196,6 @@ class RetrievalTool(BaseTool):
             logger.error(f"Embedding generation failed: {e}")
             return []
     
-
-    
     def validate_inputs(self, query: str = None, **kwargs) -> bool:
         """
         Validate tool inputs.
@@ -168,14 +223,14 @@ class RetrievalTool(BaseTool):
         Returns:
             Dictionary containing tool metadata
         """
-        base_info = super().get_info()
-        base_info.update({
-            "description": "Retrieves relevant documents for downstream synthesis",
+        return {
+            "name": self.name,
+            "description": self.description,
             "capabilities": [
                 "query_enhancement",
                 "vector_search"
             ],
-            "input_format": "text query string",
-            "output_format": "list of raw document results"
-        })
-        return base_info
+            "input_format": "text query string with optional parameters",
+            "output_format": "list of raw document results",
+            "args_schema": self.args_schema.schema() if self.args_schema else None
+        }

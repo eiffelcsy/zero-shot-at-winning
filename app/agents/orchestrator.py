@@ -3,7 +3,7 @@ from .state import ComplianceState, create_initial_state
 from .screening import ScreeningAgent
 from .research import ResearchAgent
 from .validation import ValidationAgent
-from .learning import LearningAgent
+# from .learning import LearningAgent
 from typing import Dict, Any, Optional
 import uuid
 from datetime import datetime
@@ -11,24 +11,15 @@ from datetime import datetime
 class ComplianceOrchestrator:
     """LangGraph-powered multi-agent orchestrator with memory overlay support"""
     
-    def __init__(self, 
-                chroma_host: str = "localhost", 
-                chroma_port: int = 8001, 
-                memory_overlay: str = ""):
+    def __init__(self, memory_overlay: str = ""):
         # Store configuration
-        self.chroma_host = chroma_host
-        self.chroma_port = chroma_port
         self.memory_overlay = memory_overlay
         
         # Initialize agents with memory overlay support
         self.screening_agent = ScreeningAgent(memory_overlay=memory_overlay)
-        self.research_agent = ResearchAgent(
-            chroma_host=chroma_host, 
-            chroma_port=chroma_port,
-            memory_overlay=memory_overlay
-        )
-        self.validation_agent = ValidationAgent(memory_overlay=memory_overlay)
-        self.learning_agent = LearningAgent()
+        self.research_agent = ResearchAgent(memory_overlay=memory_overlay)
+        # self.validation_agent = ValidationAgent()
+        # self.learning_agent = LearningAgent()
         
         # Build workflow
         self.workflow = self._build_workflow()
@@ -40,7 +31,7 @@ class ComplianceOrchestrator:
         # Update each agent's memory
         self.screening_agent.update_memory(new_memory_overlay)
         self.research_agent.update_memory(new_memory_overlay)
-        self.validation_agent.update_memory(new_memory_overlay)
+        # self.validation_agent.update_memory()
         
         # Rebuild the workflow with updated agents
         self.workflow = self._build_workflow()
@@ -52,8 +43,8 @@ class ComplianceOrchestrator:
         # Add nodes - agents handle LangGraph state directly
         workflow.add_node("screening", self.screening_agent.process)
         workflow.add_node("research", self.research_agent.process)
-        workflow.add_node("validation", self.validation_agent.process)
-        workflow.add_node("learning", self.learning_agent.process)
+        # workflow.add_node("validation", self.validation_agent.process)
+        # workflow.add_node("learning", self.learning_agent.process)
         
         # Define flow
         workflow.add_edge(START, "screening")
@@ -64,14 +55,14 @@ class ComplianceOrchestrator:
             self._route_after_screening,
             {
                 "research": "research",
-                "validation": "validation",
+                # "validation": "validation",
                 "end": END
             }
         )
         
-        workflow.add_edge("research", "validation")
-        workflow.add_edge("validation", 'learning')
-        workflow.add_edge("learning", END)
+        workflow.add_edge("research", END)
+        # workflow.add_edge("validation", 'learning')
+        # workflow.add_edge("learning", END)
         
         return workflow.compile()
     
@@ -87,7 +78,7 @@ class ComplianceOrchestrator:
         if screening_analysis.get("needs_research", True):
             return "research"
         else:
-            return "validation"
+            return "end"
     
     async def analyze_feature(self, 
                             feature_name: str, 
@@ -122,7 +113,7 @@ class ComplianceOrchestrator:
                 "risk_level": screening_analysis.get("risk_level", "UNKNOWN"),
                 "workflow_completed": final_state.get("workflow_completed"),
                 "agents_completed": [
-                    agent for agent in ["screening", "research", "validation", "learning"]
+                    agent for agent in ["screening", "research", "validation", "learning"] # TODO: remove validation and learning
                     if final_state.get(f"{agent}_completed", False)
                 ],
                 "evidence_sources": len(final_state.get("research_evidence", [])),
@@ -138,7 +129,7 @@ class ComplianceOrchestrator:
             return {
                 "session_id": initial_state.get("session_id"),
                 "feature_name": feature_name,
-                "error": f"Workflow failed: {str(e)}",
+                "error": f"Workflow failed: {str(e)}, \n Final state: {final_state}",
                 "workflow_completed": False,
                 "agents_completed": [],
                 "risk_level": "ERROR",
@@ -149,14 +140,12 @@ class ComplianceOrchestrator:
     def get_workflow_status(self) -> Dict[str, Any]:
         """Get current workflow configuration status"""
         return {
-            "chroma_host": self.chroma_host,
-            "chroma_port": self.chroma_port,
             "has_memory_overlay": bool(self.memory_overlay),
             "memory_overlay_length": len(self.memory_overlay),
             "agents_initialized": {
                 "screening": bool(self.screening_agent),
                 "research": bool(self.research_agent),
-                "validation": bool(self.validation_agent),
-                "learning": bool(self.learning_agent)
+                # "validation": bool(self.validation_agent),
+                # "learning": bool(self.learning_agent)
             }
         }
