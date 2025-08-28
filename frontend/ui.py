@@ -216,7 +216,7 @@ with st.sidebar:
     st.markdown("""
         <div style="text-align: center; color: rgba(255,255,255,0.6); font-size: 0.8rem;">
             <p>🚀 TikTok TechJam 2025</p>
-            <p>Built with ❤️ by Team 4</p>
+            <p>Built with ❤️ by Zero Shot at Winning</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -764,7 +764,7 @@ st.markdown("---")
 st.markdown("""
     <div style="text-align: center; color: rgba(255,255,255,0.6); padding: 2rem;">
         <p><strong>TikTok TechJam 2025</strong> | Geo-Regulation Compliance System</p>
-        <p>🚀 Built with Streamlit • 🤖 Powered by LLM Agents • ⚖️ Ensuring Global Compliance</p>
-        <p style="font-size: 0.8rem;">Mobile-Optimized ✅ | iOS & Android Compatible 📱</p>
+        <p>🚀 Built with Streamlit • Powered by LLM Agents • Ensuring Global Compliance</p>
+        <p style="font-size: 0.8rem;">Mobile-Optimized | iOS & Android Compatible 📱</p>
     </div>
 """, unsafe_allow_html=True)

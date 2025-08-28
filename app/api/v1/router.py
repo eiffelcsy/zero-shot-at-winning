@@ -37,6 +37,10 @@ pipeline = PDFIngestionPipeline(
     collection_name="regulation_kb"
 )
 
+# ================================================
+# REGULATION UPLOAD ENDPOINTS
+# ================================================
+
 @router.post("/upload-pdfs", response_model=UploadResponse)
 async def upload_pdf_files(
     files: List[UploadFile] = File(...),
@@ -262,56 +266,6 @@ async def clear_document_collection() -> Dict[str, Any]:
 #     except Exception as e:
 #         logger.error(f"Error processing feedback: {str(e)}")
 #         raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
-
-
-# # ================================================
-# # REGULATION UPLOAD ENDPOINTS
-# # ================================================
-
-# @router.post("/upload-pdfs", response_model=Dict[str, Any])
-# async def upload_regulation_pdfs(files: List[UploadFile] = File(...)):
-#     """
-#     Batch upload PDF regulation documents
-    
-#     Args:
-#         files: List of PDF files to upload and process
-    
-#     Returns:
-#         Upload results with statistics
-#     """
-#     try:
-#         logger.info(f"Starting batch upload of {len(files)} PDF files")
-        
-#         upload_results = await process_pdf_batch_upload(files)
-        
-#         logger.info(f"Batch upload completed: {upload_results['successful']} successful, {upload_results['failed']} failed")
-#         return upload_results
-        
-#     except Exception as e:
-#         logger.error(f"Error in batch PDF upload: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"PDF upload failed: {str(e)}")
-
-
-# @router.get("/upload-stats", response_model=Dict[str, Any])
-# async def get_upload_statistics():
-#     """
-#     Get statistics about the PDF upload pipeline
-    
-#     Returns:
-#         Pipeline configuration and storage statistics
-#     """
-#     try:
-#         logger.info("Fetching upload pipeline statistics")
-        
-#         stats = await get_pipeline_stats()
-        
-#         logger.info("Upload statistics retrieved successfully")
-#         return stats
-        
-#     except Exception as e:
-#         logger.error(f"Error fetching upload stats: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"Failed to fetch statistics: {str(e)}")
-
 
 # # ================================================
 # # ANALYTICS ENDPOINTS
