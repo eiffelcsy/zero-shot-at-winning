@@ -3,6 +3,7 @@ from .state import ComplianceState
 from .screening import ScreeningAgent
 from .research import ResearchAgent
 from .validation import ValidationAgent
+from .learning import LearningAgent
 from typing import Dict, Any
 import uuid
 from datetime import datetime
@@ -15,6 +16,7 @@ class ComplianceOrchestrator:
         self.screening_agent = ScreeningAgent()
         self.research_agent = ResearchAgent(kb_dir=kb_dir)
         self.validation_agent = ValidationAgent()
+        self.learning_agent = LearningAgent()
         
         # Build workflow
         self.workflow = self._build_workflow()
@@ -27,6 +29,7 @@ class ComplianceOrchestrator:
         workflow.add_node("screening", self.screening_agent.process)
         workflow.add_node("research", self.research_agent.process)
         workflow.add_node("validation", self.validation_agent.process)
+        workflow.add_node("learning", self.learning_agent.process)
         
         # Define flow
         workflow.add_edge(START, "screening")
@@ -43,7 +46,8 @@ class ComplianceOrchestrator:
         )
         
         workflow.add_edge("research", "validation")
-        workflow.add_edge("validation", END)
+        workflow.add_edge("validation", 'learning')
+        workflow.add_edge("learning", END)
         
         return workflow.compile()
     
