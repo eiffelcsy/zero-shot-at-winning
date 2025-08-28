@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from .state import ComplianceState
 from .screening import ScreeningAgent
-from .research1 import ResearchAgent
+from .research import ResearchAgent
 from .validation import ValidationAgent
 from typing import Dict, Any
 import uuid

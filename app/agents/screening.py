@@ -1,22 +1,23 @@
 from pydantic import BaseModel, Field
-from langchain.prompts import PromptTemplate
 from .base import BaseComplianceAgent
-from prompts.templates import TIKTOK_CONTEXT, SCREENING_PROMPT
-from typing import List, Dict, Any
+from ..prompts.templates import SCREENING_PROMPT
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
 
+
 class ScreeningOutput(BaseModel):
+    agent: str = Field(description="Agent name", default="ScreeningAgent")
     risk_level: str = Field(description="Risk level: LOW, MEDIUM, HIGH")
     compliance_required: bool = Field(description="Whether geo-compliance is required")
     confidence: float = Field(description="Confidence score 0.0-1.0")
     trigger_keywords: List[str] = Field(description="Detected compliance keywords")
-    regulatory_indicators: List[str] = Field(description="Regulatory signals found")
     reasoning: str = Field(description="Analysis reasoning")
     needs_research: bool = Field(description="Whether research agent is needed")
     geographic_scope: List[str] = Field(description="Geographic regions affected")
     age_sensitivity: bool = Field(description="Whether feature affects minors")
     data_sensitivity: str = Field(description="Data sensitivity level")
+
 
 class ScreeningAgent(BaseComplianceAgent):
     """First agent - analyzes features for compliance indicators"""
@@ -26,59 +27,28 @@ class ScreeningAgent(BaseComplianceAgent):
         self.setup_prompts()
     
     def setup_prompts(self):
-        # Enhanced prompt with your TikTok terminology
-        prompt_template = TIKTOK_CONTEXT + """
-
-FEATURE TO ANALYZE: {feature_description}
-
-ANALYSIS FRAMEWORK:
-Analyze this feature for potential regulatory requirements across multiple jurisdictions.
-
-KEY COMPLIANCE PATTERNS TO EVALUATE:
-1. **Data Protection & Privacy**: Personal data collection, processing, retention
-2. **Age Restrictions & Child Safety**: Minor protection, parental controls, age verification  
-3. **Content Governance**: Moderation obligations, transparency requirements
-4. **Geographic Enforcement**: Location-based restrictions, jurisdiction-specific behaviors
-5. **Platform Responsibilities**: Regulatory reporting, user safety obligations
-
-DETECTION CRITERIA:
-- Age-sensitive functionality (ASL) or data processing involving minors
-- Geographic targeting (GH) or location-aware enforcement mechanisms  
-- Personal data handling (T5) including collection, processing, or retention
-- Content control mechanisms including filtering, blocking, or moderation
-
-Return ONLY valid JSON matching this schema:
-{{
-    "risk_level": "LOW|MEDIUM|HIGH",
-    "compliance_required": true/false,
-    "confidence": 0.0-1.0,
-    "trigger_keywords": ["keyword1", "keyword2"],
-    "regulatory_indicators": ["ASL", "GH", "T5"],
-    "reasoning": "detailed explanation",
-    "needs_research": true/false,
-    "geographic_scope": ["region1", "region2"] or "global" or "unknown",
-    "age_sensitivity": true/false,
-    "data_sensitivity": "T5|T4|T3|T2|T1|none"
-}}
-"""
-        
-        prompt = PromptTemplate(
-            input_variables=["feature_description"],
-            template=prompt_template
-        )
-        self.create_chain(prompt, ScreeningOutput)
+        """Setup LangChain prompt and chain"""
+        self.create_chain(SCREENING_PROMPT, ScreeningOutput)
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze feature for compliance risk"""
         try:
+            # Extract inputs from state
+            feature_name = state.get("feature_name", "")
             feature_description = state.get("feature_description", "")
+            context_documents = state.get("context_documents", "")
             
             if not feature_description:
                 raise ValueError("Missing feature description")
             
+            # Prepare context documents string
+            context_docs_str = self._format_context_documents(context_documents)
+            
             # Run LLM analysis
             result = await self.safe_llm_call({
-                "feature_description": feature_description
+                "feature_name": feature_name,
+                "feature_description": feature_description,
+                "context_documents": context_docs_str
             })
             
             # Enhanced result with metadata
@@ -99,24 +69,64 @@ Return ONLY valid JSON matching this schema:
             self.logger.error(f"Screening agent failed: {e}")
             return {
                 "screening_analysis": {
+                    "agent": "ScreeningAgent",
                     "risk_level": "ERROR",
                     "compliance_required": None,
                     "confidence": 0.0,
                     "reasoning": f"Screening failed: {str(e)}",
-                    "error": str(e)
+                    "error": str(e),
+                    "trigger_keywords": [],
+                    "needs_research": False,
+                    "geographic_scope": ["unknown"],
+                    "age_sensitivity": False,
+                    "data_sensitivity": "none"
                 },
                 "screening_completed": True,
                 "next_step": "validation"  # Skip to validation on error
             }
     
+    def _format_context_documents(self, context_documents: Any) -> str:
+        """Format context documents for the prompt"""
+        if not context_documents:
+            return "No additional context documents provided."
+        
+        if isinstance(context_documents, str):
+            return context_documents
+        
+        if isinstance(context_documents, list):
+            formatted_docs = []
+            for i, doc in enumerate(context_documents, 1):
+                if isinstance(doc, dict):
+                    # If document is a dictionary with metadata
+                    title = doc.get("title", f"Document {i}")
+                    content = doc.get("content", str(doc))
+                    formatted_docs.append(f"**{title}**:\n{content}")
+                else:
+                    # If document is just text
+                    formatted_docs.append(f"**Document {i}**:\n{str(doc)}")
+            return "\n\n".join(formatted_docs)
+        
+        if isinstance(context_documents, dict):
+            formatted_docs = []
+            for key, value in context_documents.items():
+                formatted_docs.append(f"**{key}**:\n{str(value)}")
+            return "\n\n".join(formatted_docs)
+        
+        # Fallback: convert to string
+        return str(context_documents)
+    
     def _enhance_result(self, result: Dict, original_state: Dict) -> Dict:
         """Add metadata and validation to screening result"""
+        
+        # Ensure agent field is set
+        result["agent"] = "ScreeningAgent"
         
         # Add session metadata
         result["session_metadata"] = {
             "agent": self.name,
             "timestamp": datetime.now().isoformat(),
-            "feature_name": original_state.get("feature_name")
+            "feature_name": original_state.get("feature_name", ""),
+            "has_context_docs": bool(original_state.get("context_documents"))
         }
         
         # Validate confidence score
@@ -125,12 +135,31 @@ Return ONLY valid JSON matching this schema:
         
         # Ensure lists are properly formatted
         if not isinstance(result.get("geographic_scope"), list):
-            result["geographic_scope"] = ["unknown"]
+            if result.get("geographic_scope") == "global":
+                result["geographic_scope"] = ["global"]
+            elif result.get("geographic_scope") == "unknown":
+                result["geographic_scope"] = ["unknown"]
+            else:
+                result["geographic_scope"] = ["unknown"]
         
         if not isinstance(result.get("trigger_keywords"), list):
             result["trigger_keywords"] = []
         
-        # Set research decision
+        # Validate boolean fields
+        result["compliance_required"] = bool(result.get("compliance_required", False))
+        result["age_sensitivity"] = bool(result.get("age_sensitivity", False))
+        
+        # Validate data sensitivity
+        valid_sensitivities = ["T5", "T4", "T3", "T2", "T1", "none"]
+        if result.get("data_sensitivity") not in valid_sensitivities:
+            result["data_sensitivity"] = "none"
+        
+        # Validate risk level
+        valid_risk_levels = ["LOW", "MEDIUM", "HIGH"]
+        if result.get("risk_level") not in valid_risk_levels:
+            result["risk_level"] = "MEDIUM"
+        
+        # Set research decision logic
         result["needs_research"] = (
             result.get("compliance_required", False) or 
             result.get("confidence", 0) < 0.8 or

@@ -1,357 +1,365 @@
-"""
-ResearchAgent
--------------
-Purpose:
-  Given:
-    - normalized feature text (from Terminology Resolver)
-    - ScreeningAgent analysis (risk, jurisdictions, age sensitivity, etc.)
-  Find:
-    - The most relevant regulations (from the 5 targeted regs)
-    - Top evidence snippets (title/section/url/excerpt) per regulation
-  Output:
-    - Compact payload for the Validator Agent (not implemented here)
-
-Data dependencies:
-  - Local curated KB files at data/kb/*.jsonl
-    Each line: {
-      "jurisdiction": "US|EU|CA|UT|FL",
-      "reg_code": "US_2258A | EU_DSA | CA_SB976 | UT_MINORS | FL_MINORS",
-      "name": "18 USC §2258A",
-      "section": "(a) Reporting requirements",
-      "url": "https://...",
-      "excerpt": "short, precise passage ..."
-    }
-
-MVP Retrieval:
-  - In-memory TF-IDF-ish scoring (no external DB)
-  - Two-pass retrieval:
-      (1) Focused: search only within predicted regs
-      (2) Global: low-k "safety net" search over all docs
-"""
-
-from __future__ import annotations
-from typing import Dict, Any, List, Tuple, Iterable
-from dataclasses import dataclass
-import os, json, glob, math, re
-from collections import Counter, defaultdict
-from hashlib import sha256
-
-# If you have a BaseComplianceAgent class, inherit it; otherwise a minimal stub is fine.
-try:
-    from .base import BaseComplianceAgent  # optional
-except Exception:
-    class BaseComplianceAgent:
-        def __init__(self, name: str, llm=None):
-            self.name = name
-            self.llm = llm
-        def _log_interaction(self, inp, out):  # no-op for MVP
-            pass
+from pydantic import BaseModel, Field
+from .base import BaseComplianceAgent
+from ..prompts.templates import RESEARCH_PROMPT
+from typing import Dict, Any, List
+from datetime import datetime
+import json
+import os
+import glob
+import re
+from collections import defaultdict
+import math
 
 
-# ------------------------------
-# Constants & tiny helpers
-# ------------------------------
-
-REG_EU_DSA     = "EU_DSA"
-REG_CA_SB976   = "CA_SB976"
-REG_FL_MINORS  = "FL_MINORS"
-REG_UT_MINORS  = "UT_MINORS"
-REG_US_2258A   = "US_2258A"
-
-SUPPORTED_REGS = {REG_EU_DSA, REG_CA_SB976, REG_FL_MINORS, REG_UT_MINORS, REG_US_2258A}
-
-TOKEN_RE = re.compile(r"[a-zA-Z0-9]+")
-STOP = set(["the","a","an","of","and","for","to","in","on","with","by","or","is","are","be"])
-
-def tokenize(text: str) -> List[str]:
-    return [t.lower() for t in TOKEN_RE.findall(text or "") if t.lower() not in STOP]
+class ResearchOutput(BaseModel):
+    agent: str = Field(description="Agent name", default="ResearchAgent")
+    candidates: List[Dict[str, Any]] = Field(description="Candidate regulations identified")
+    evidence: List[Dict[str, Any]] = Field(description="Evidence snippets with sources")
+    query_used: str = Field(description="Search query constructed")
+    confidence_score: float = Field(description="Overall confidence in research findings")
 
 
-@dataclass
 class KBRecord:
-    jurisdiction: str
-    reg_code: str
-    name: str
-    section: str
-    url: str
-    excerpt: str
-    # cached tokens
-    tokens: List[str] | None = None
+    """Knowledge base record for regulation information"""
+    def __init__(self, jurisdiction: str, reg_code: str, name: str, section: str, url: str, excerpt: str):
+        self.jurisdiction = jurisdiction
+        self.reg_code = reg_code
+        self.name = name
+        self.section = section
+        self.url = url
+        self.excerpt = excerpt
+        self.tokens = self._tokenize(f"{name} {section} {excerpt}")
+    
+    def _tokenize(self, text: str) -> List[str]:
+        """Simple tokenization for search"""
+        STOP_WORDS = {"the", "a", "an", "of", "and", "for", "to", "in", "on", "with", "by", "or", "is", "are", "be"}
+        tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+        return [t for t in tokens if t not in STOP_WORDS]
 
-
-# ------------------------------
-# Research Agent
-# ------------------------------
 
 class ResearchAgent(BaseComplianceAgent):
-    """
-    Research Agent:
-      - Loads local KB (JSONL)
-      - Builds IDF over excerpts
-      - Scores documents against a query using sum(IDF(term)) over intersection
-      - Returns top-k per candidate regulation + a small global safety net
-    """
-
-    def __init__(self, kb_dir: str = "data/kb", top_k_per_reg: int = 3, top_k_global: int = 2, llm=None):
-        super().__init__("ResearchAgent", llm)
+    """Research Agent - finds relevant regulations using local knowledge base"""
+    
+    def __init__(self, kb_dir: str = "data/kb"):
+        super().__init__("ResearchAgent")
         self.kb_dir = kb_dir
-        self.top_k_per_reg = top_k_per_reg
-        self.top_k_global = top_k_global
-
-        self.kb: List[KBRecord] = self._load_kb(self.kb_dir)
-        self.df = self._build_df(self.kb)         # document frequency
-        self.N = max(1, len(self.kb))
-        self.idf = {term: math.log((self.N + 1) / (df + 1)) + 1.0 for term, df in self.df.items()}
-
-    # ---------- Public entrypoint ----------
-
-    def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Expected input_data:
-          {
-            "feature_name": "...",
-            "feature_description": "...",
-            "normalized_text": "...",      # optional; fallback to feature_description
-            "screening": {                 # ScreeningAgent.analysis
-               "risk_level": "...",
-               "compliance_required": true/false,
-               "confidence": 0.xx,
-               "trigger_keywords": [...],
-               "regulatory_indicators": [...],
-               "reasoning": "...",
-               "needs_research": true/false,
-               "geographic_scope": ["CA", "US"] or ["unknown"],
-               "age_sensitivity": true/false
-            }
-          }
-        Returns:
-          {
-            "agent": "ResearchAgent",
-            "query": "...",          # internal query used
-            "candidates": [          # candidate regs chosen by heuristics
-              {"reg": "CA_SB976", "why": "...", "score": 0.82}
-            ],
-            "evidence": [            # ranked docs to pass to validator
-              {
-                "reg": "CA_SB976",
-                "jurisdiction": "CA",
-                "name": "CA SB-976",
-                "section": "(...)",
-                "url": "https://...",
-                "excerpt": "....",
-                "score": 7.43
-              },
-              ...
-            ],
-            "next_step": "validation"
-          }
-        """
+        
+        # Load knowledge base
+        self.kb_records = self._load_knowledge_base()
+        self.idf_scores = self._build_idf_scores()
+        
+        # Setup LangChain components
+        self._setup_chain()
+    
+    def _setup_chain(self):
+        """Setup LangChain prompt and parser"""
+        self.create_chain(RESEARCH_PROMPT, ResearchOutput)
+    
+    async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """LangGraph-compatible process method"""
         try:
-            norm_text = input_data.get("normalized_text") or input_data.get("feature_description", "")
-            screening = input_data.get("screening", {})
-
-            query = self._form_query(norm_text, screening)
-            candidates = self._select_candidate_regs(screening, norm_text)
-
-            # Focused retrieval per candidate reg
-            focused = []
-            for reg, why in candidates:
-                hits = self._retrieve(query, restrict_reg=reg, k=self.top_k_per_reg)
-                for rec, score in hits:
-                    focused.append(self._rec_to_ev(rec, score, reg_override=reg))
-
-            # Global safety net (small k)
-            global_hits = self._retrieve(query, restrict_reg=None, k=self.top_k_global)
-            global_ev = [self._rec_to_ev(rec, score) for rec, score in global_hits]
-
-            evidence = self._merge_and_dedupe(focused + global_ev)
-
-            result = {
-                "agent": self.name,
-                "query": query,
-                "candidates": [{"reg": r, "why": why, "score": self._candidate_prior(r, screening)} for r, why in candidates],
-                "evidence": evidence,
+            # Extract screening analysis from state
+            screening_analysis = state.get("screening_analysis", {})
+            
+            if not screening_analysis:
+                raise ValueError("Missing screening analysis from previous agent")
+            
+            # Step 1: Build search query based on screening results
+            search_query = self._build_search_query_from_screening(screening_analysis)
+            
+            # Step 2: Find candidate regulations based on screening flags
+            candidates = self._identify_candidate_regulations(screening_analysis)
+            
+            # Step 3: Search knowledge base for evidence
+            evidence = self._search_evidence(search_query, candidates)
+            
+            # Step 4: Use LLM to synthesize findings
+            llm_input = {
+                "screening_analysis": json.dumps(screening_analysis, indent=2),
+                "evidence_found": json.dumps(evidence[:5], indent=2)  # Top 5 for LLM context
+            }
+            
+            result = await self.safe_llm_call(llm_input)
+            
+            # Step 5: Enhance result with full evidence and candidates
+            result["evidence"] = evidence[:10]  # Return top 10 evidence pieces
+            result["candidates"] = [{"reg": c[0], "why": c[1], "score": c[2]} for c in candidates]
+            result["query_used"] = search_query
+            
+            # Ensure agent field is set
+            result["agent"] = "ResearchAgent"
+            
+            # Validate confidence score
+            if not isinstance(result.get("confidence_score"), (int, float)):
+                result["confidence_score"] = 0.7
+            
+            self.log_interaction(state, result)
+            
+            # Return LangGraph state update
+            return {
+                "research_evidence": result["evidence"],
+                "research_candidates": result["candidates"],
+                "research_query": result["query_used"],
+                "research_confidence": result.get("confidence_score", 0.7),
+                "research_analysis": result,  # Full research output
+                "research_completed": True,
+                "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
             }
-            self._log_interaction(input_data, result)
-            return result
-
+            
         except Exception as e:
+            self.logger.error(f"Research agent failed: {e}")
             return {
-                "agent": self.name,
-                "error": f"research_failed: {e}",
-                "evidence": [],
-                "next_step": "human_review"
+                "research_evidence": [],
+                "research_candidates": [],
+                "research_query": "",
+                "research_analysis": {
+                    "agent": "ResearchAgent",
+                    "candidates": [],
+                    "evidence": [],
+                    "query_used": "",
+                    "confidence_score": 0.0,
+                    "error": str(e)
+                },
+                "research_error": str(e),
+                "research_completed": True,
+                "next_step": "validation"
             }
-
-    # ---------- Retrieval internals ----------
-
-    def _load_kb(self, kb_dir: str) -> List[KBRecord]:
-        kb: List[KBRecord] = []
-        for path in glob.glob(os.path.join(kb_dir, "*.jsonl")):
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line: continue
-                    try:
-                        obj = json.loads(line)
-                        rec = KBRecord(
-                            jurisdiction=obj.get("jurisdiction",""),
-                            reg_code=obj.get("reg_code",""),
-                            name=obj.get("name",""),
-                            section=obj.get("section",""),
-                            url=obj.get("url",""),
-                            excerpt=obj.get("excerpt",""),
-                        )
-                        rec.tokens = tokenize(" ".join([rec.name, rec.section, rec.excerpt]))
-                        kb.append(rec)
-                    except json.JSONDecodeError:
-                        continue
-        return kb
-
-    def _build_df(self, kb: List[KBRecord]) -> Dict[str, int]:
-        seen_per_doc = defaultdict(int)
-        for rec in kb:
-            if not rec.tokens: continue
-            for term in set(rec.tokens):
-                seen_per_doc[term] += 1
-        return dict(seen_per_doc)
-
-    def _score(self, query_terms: List[str], doc_terms: List[str]) -> float:
-        """Simple sum of IDF for overlapping terms; fast and explainable for MVP."""
-        if not query_terms or not doc_terms:
-            return 0.0
-        qset = set(query_terms)
-        dset = set(doc_terms)
-        overlap = qset & dset
-        return sum(self.idf.get(t, 0.0) for t in overlap)
-
-    def _retrieve(self, query: str, restrict_reg: str | None, k: int) -> List[Tuple[KBRecord, float]]:
-        q_terms = tokenize(query)
-        scored: List[Tuple[KBRecord, float]] = []
-        for rec in self.kb:
-            if restrict_reg and rec.reg_code != restrict_reg:
-                continue
-            s = self._score(q_terms, rec.tokens or [])
-            if s > 0:
-                scored.append((rec, s))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:k]
-
-    def _merge_and_dedupe(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Prefer the highest score per (reg, url, section) tuple."""
-        best: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
-        for ev in items:
-            key = (ev.get("reg",""), ev.get("url",""), ev.get("section",""))
-            if key not in best or ev.get("score",0) > best[key].get("score",0):
-                best[key] = ev
-        return sorted(best.values(), key=lambda x: x.get("score",0), reverse=True)
-
-    def _rec_to_ev(self, rec: KBRecord, score: float, reg_override: str | None = None) -> Dict[str, Any]:
-        return {
-            "reg": reg_override or rec.reg_code,
-            "jurisdiction": rec.jurisdiction,
-            "name": rec.name,
-            "section": rec.section,
-            "url": rec.url,
-            "excerpt": rec.excerpt,
-            "score": round(score, 4),
-            "doc_hash": sha256((rec.url + rec.section).encode("utf-8")).hexdigest()[:12]
-        }
-
-    # ---------- Candidate selection (no training; pure heuristics) ----------
-
-    def _select_candidate_regs(self, screening: Dict[str, Any], text: str) -> List[Tuple[str, str]]:
-        """
-        Decide which regs to search first, based on:
-          - geographic_scope (CA, UT, FL, US, EU, unknown)
-          - age_sensitivity (True/False)
-          - trigger/regulatory keywords from ScreeningAgent
-        Returns: list of (reg_code, why_string)
-        """
-        geo = [g.upper() for g in screening.get("geographic_scope", []) or []]
-        age = bool(screening.get("age_sensitivity", False))
-        triggers = " ".join(screening.get("trigger_keywords", []) or []).lower()
-        indicators = " ".join(screening.get("regulatory_indicators", []) or []).lower()
-        full_text = f"{text}\n{triggers}\n{indicators}".lower()
-
-        cands: List[Tuple[str, str]] = []
-
-        # US NCMEC reporting
-        if re.search(r"\b(ncmec|child\s*(sexual)?\s*abuse|csam|report)\b", full_text) or "us" in geo:
-            cands.append((REG_US_2258A, "US provider reporting to NCMEC / child exploitation"))
-
-        # California minors personalization defaults
-        if ("california" in geo or "ca" in geo or "sb-976" in full_text or "sb976" in full_text) and age:
-            cands.append((REG_CA_SB976, "CA minors + PF defaults / parental opt-in"))
-
-        # Utah minors curfew/age verification
-        if ("utah" in geo or "ut" in geo) and age:
-            cands.append((REG_UT_MINORS, "UT minors curfew/age restrictions"))
-
-        # Florida minors online protections
-        if ("florida" in geo or "fl" in geo) and age:
-            cands.append((REG_FL_MINORS, "FL online protections for minors"))
-
-        # EU DSA (ads to minors, transparency, recommender systems)
-        if ("eu" in geo or "gdpr" in full_text or "digital services act" in full_text or "dsa" in full_text):
-            cands.append((REG_EU_DSA, "EU Digital Services Act relevance"))
-
-        # Fallback: if nothing classified, search all but still prioritize minors/US if cues exist
-        if not cands:
-            # If minors cues
-            if re.search(r"\b(minor|under\s*18|teen|age[-\s]*gate)\b", full_text):
-                cands.extend([
-                    (REG_CA_SB976, "Ambiguous minors: include CA as candidate"),
-                    (REG_FL_MINORS, "Ambiguous minors: include FL as candidate"),
-                    (REG_UT_MINORS, "Ambiguous minors: include UT as candidate"),
-                    (REG_EU_DSA, "Ambiguous minors: include EU-DSA minors controls"),
-                ])
-            else:
-                # Broad US/EU coverage
-                cands.extend([
-                    (REG_US_2258A, "No clear signal: include US reporting"),
-                    (REG_EU_DSA, "No clear signal: include EU DSA"),
-                ])
-
-        # Deduplicate while preserving order
-        seen = set()
-        uniq: List[Tuple[str, str]] = []
-        for reg, why in cands:
-            if reg in SUPPORTED_REGS and reg not in seen:
-                uniq.append((reg, why)); seen.add(reg)
-        return uniq
-
-    def _candidate_prior(self, reg_code: str, screening: Dict[str, Any]) -> float:
-        """A tiny prior score used for UI/debug; does NOT affect document ranking."""
-        base = 0.5
-        geo = [g.upper() for g in screening.get("geographic_scope", []) or []]
-        age = bool(screening.get("age_sensitivity", False))
-        if reg_code == REG_US_2258A and ("US" in geo or "UNITED STATES" in geo):
-            base += 0.2
-        if reg_code in (REG_CA_SB976, REG_FL_MINORS, REG_UT_MINORS) and age:
-            base += 0.2
-        if reg_code == REG_EU_DSA and ("EU" in geo):
-            base += 0.2
-        return min(1.0, base)
-
-    # ---------- Query formulation ----------
-
-    def _form_query(self, norm_text: str, screening: Dict[str, Any]) -> str:
-        """
-        Build a compact query string from normalized feature text and salient screening fields.
-        Keep it short to reduce noise for TF-IDF style matching.
-        """
-        parts = [norm_text]
-        if screening.get("age_sensitivity"):
-            parts.append("minors under 18 age gate")
-        geo = screening.get("geographic_scope") or []
-        if isinstance(geo, list) and geo:
-            parts.append(" ".join(geo))
-        # include 2–3 top keywords if present
-        for k in (screening.get("trigger_keywords") or [])[:3]:
-            parts.append(k)
-        # short indicators
-        for k in (screening.get("regulatory_indicators") or [])[:2]:
-            parts.append(k)
-        return " ".join(parts)
+    
+    def _build_search_query_from_screening(self, screening_analysis: Dict) -> str:
+        """Build targeted search query based on screening analysis flags"""
+        query_parts = []
+        
+        # Add trigger keywords from screening
+        trigger_keywords = screening_analysis.get("trigger_keywords", [])
+        if trigger_keywords:
+            query_parts.extend(trigger_keywords[:3])  # Top 3 keywords
+        
+        # Add geographic scope
+        geo_scope = screening_analysis.get("geographic_scope", [])
+        if isinstance(geo_scope, list) and geo_scope != ["unknown"]:
+            query_parts.extend(geo_scope)
+        
+        # Add compliance pattern terms based on screening flags
+        if screening_analysis.get("age_sensitivity"):
+            query_parts.extend(["minors", "under 18", "child protection", "parental controls"])
+        
+        if screening_analysis.get("data_sensitivity") in ["T5", "T4"]:
+            query_parts.extend(["personal data", "privacy", "data protection"])
+        
+        if screening_analysis.get("compliance_required"):
+            query_parts.extend(["regulatory compliance", "legal requirements"])
+        
+        # Add risk level specific terms
+        risk_level = screening_analysis.get("risk_level", "")
+        if risk_level == "HIGH":
+            query_parts.extend(["mandatory", "required", "must comply"])
+        elif risk_level == "MEDIUM":
+            query_parts.extend(["recommended", "should comply"])
+        
+        return " ".join(query_parts)
+    
+    def _identify_candidate_regulations(self, screening_analysis: Dict) -> List[tuple]:
+        """Identify candidate regulations based on screening flags"""
+        candidates = []
+        geo_scope = [g.upper() for g in screening_analysis.get("geographic_scope", [])]
+        age_sensitive = screening_analysis.get("age_sensitivity", False)
+        data_sensitive = screening_analysis.get("data_sensitivity", "none")
+        compliance_required = screening_analysis.get("compliance_required", False)
+        
+        # California regulations
+        if any(region in geo_scope for region in ["CALIFORNIA", "CA", "US", "UNITED STATES"]):
+            if age_sensitive:
+                candidates.append(("CA_SB976", "California minors protection law", 0.9))
+                candidates.append(("CA_CCPA", "California Consumer Privacy Act", 0.7))
+        
+        # Utah regulations  
+        if any(region in geo_scope for region in ["UTAH", "UT", "US", "UNITED STATES"]):
+            if age_sensitive:
+                candidates.append(("UT_MINORS", "Utah social media regulations for minors", 0.9))
+        
+        # US federal regulations
+        if any(region in geo_scope for region in ["US", "UNITED STATES", "FEDERAL"]):
+            candidates.append(("US_2258A", "US federal reporting requirements", 0.8))
+            if age_sensitive:
+                candidates.append(("COPPA", "Children's Online Privacy Protection Act", 0.9))
+        
+        # EU regulations
+        if any(region in geo_scope for region in ["EU", "EUROPE", "EUROPEAN UNION"]):
+            if data_sensitive in ["T5", "T4"]:
+                candidates.append(("GDPR", "General Data Protection Regulation", 0.9))
+            if compliance_required:
+                candidates.append(("EU_DSA", "EU Digital Services Act", 0.8))
+        
+        # UK regulations
+        if any(region in geo_scope for region in ["UK", "UNITED KINGDOM", "BRITAIN"]):
+            if age_sensitive:
+                candidates.append(("UK_OSA", "UK Online Safety Act", 0.8))
+            if data_sensitive in ["T5", "T4"]:
+                candidates.append(("UK_DPA", "UK Data Protection Act", 0.7))
+        
+        # Global/Multi-jurisdictional
+        if "GLOBAL" in geo_scope or not geo_scope or geo_scope == ["unknown"]:
+            if age_sensitive:
+                candidates.append(("COPPA", "US Children's Online Privacy Protection Act", 0.6))
+                candidates.append(("CA_SB976", "California Age-Appropriate Design Code", 0.5))
+            if data_sensitive in ["T5", "T4"]:
+                candidates.append(("GDPR", "EU General Data Protection Regulation", 0.6))
+        
+        # Fallback if no specific matches
+        if not candidates:
+            candidates.append(("GENERAL_COMPLIANCE", "General compliance requirements", 0.4))
+        
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[2], reverse=True)
+        
+        return candidates[:5]  # Return top 5 candidates
+    
+    def _search_evidence(self, query: str, candidates: List[tuple]) -> List[Dict]:
+        """Search for evidence in knowledge base"""
+        query_terms = set(re.findall(r"[a-zA-Z0-9]+", query.lower()))
+        evidence = []
+        
+        for record in self.kb_records:
+            # Calculate relevance score
+            doc_terms = set(record.tokens)
+            overlap = query_terms.intersection(doc_terms)
+            
+            if overlap:
+                # Base score from TF-IDF style calculation
+                score = sum(self.idf_scores.get(term, 1.0) for term in overlap)
+                
+                # Boost score for candidate regulations
+                for candidate_reg, _, candidate_score in candidates:
+                    if record.reg_code == candidate_reg:
+                        score *= (1 + candidate_score)  # Boost by candidate score
+                
+                # Boost score for exact jurisdiction matches
+                if any(record.jurisdiction.upper() in query.upper() for _ in [1]):
+                    score *= 1.2
+                
+                evidence.append({
+                    "reg": record.reg_code,
+                    "jurisdiction": record.jurisdiction,
+                    "name": record.name,
+                    "section": record.section,
+                    "url": record.url,
+                    "excerpt": record.excerpt,
+                    "score": round(score, 2)
+                })
+        
+        # Sort by score and return top results
+        evidence.sort(key=lambda x: x["score"], reverse=True)
+        return evidence
+    
+    def _load_knowledge_base(self) -> List[KBRecord]:
+        """Load regulation knowledge base from JSONL files"""
+        records = []
+        
+        # Create directory if it doesn't exist
+        os.makedirs(self.kb_dir, exist_ok=True)
+        
+        # Load from JSONL files
+        for filepath in glob.glob(os.path.join(self.kb_dir, "*.jsonl")):
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if line.strip():
+                            data = json.loads(line)
+                            record = KBRecord(
+                                jurisdiction=data.get("jurisdiction", ""),
+                                reg_code=data.get("reg_code", ""),
+                                name=data.get("name", ""),
+                                section=data.get("section", ""),
+                                url=data.get("url", ""),
+                                excerpt=data.get("excerpt", "")
+                            )
+                            records.append(record)
+            except Exception as e:
+                self.logger.warning(f"Failed to load {filepath}: {e}")
+        
+        # If no records found, create sample data
+        if not records:
+            self._create_sample_kb()
+            records = self._load_knowledge_base()  # Reload
+        
+        return records
+    
+    def _create_sample_kb(self):
+        """Create sample knowledge base for development"""
+        sample_data = [
+            {
+                "jurisdiction": "CA",
+                "reg_code": "CA_SB976",
+                "name": "California SB-976",
+                "section": "Section 1 - Default Settings",
+                "url": "https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB976",
+                "excerpt": "Social media platforms must disable personalized feeds by default for users under 18 in California"
+            },
+            {
+                "jurisdiction": "UT",
+                "reg_code": "UT_MINORS",
+                "name": "Utah Social Media Regulation Act",
+                "section": "Curfew Restrictions",
+                "url": "https://en.wikipedia.org/wiki/Utah_Social_Media_Regulation_Act",
+                "excerpt": "Requires social media platforms to implement curfew restrictions for minor users"
+            },
+            {
+                "jurisdiction": "US",
+                "reg_code": "US_2258A",
+                "name": "18 USC §2258A",
+                "section": "Reporting Requirements",
+                "url": "https://www.law.cornell.edu/uscode/text/18/2258A",
+                "excerpt": "Electronic service providers must report child sexual abuse material to NCMEC"
+            },
+            {
+                "jurisdiction": "US",
+                "reg_code": "COPPA",
+                "name": "Children's Online Privacy Protection Act",
+                "section": "Age Verification Requirements",
+                "url": "https://www.ftc.gov/enforcement/rules/rulemaking-regulatory-reform-proceedings/childrens-online-privacy-protection-rule",
+                "excerpt": "Requires parental consent for collection of personal information from children under 13"
+            },
+            {
+                "jurisdiction": "EU",
+                "reg_code": "GDPR",
+                "name": "General Data Protection Regulation",
+                "section": "Article 8 - Conditions for child's consent",
+                "url": "https://gdpr-info.eu/art-8-gdpr/",
+                "excerpt": "Processing of personal data of children requires parental consent for children under 16"
+            },
+            {
+                "jurisdiction": "EU",
+                "reg_code": "EU_DSA",
+                "name": "Digital Services Act",
+                "section": "Article 28 - Online protection of minors",
+                "url": "https://digital-strategy.ec.europa.eu/en/policies/digital-services-act-package",
+                "excerpt": "Very large online platforms must put in place appropriate measures to ensure a high level of privacy, safety and security for minors"
+            }
+        ]
+        
+        # Write sample data
+        sample_file = os.path.join(self.kb_dir, "sample_regulations.jsonl")
+        with open(sample_file, 'w', encoding='utf-8') as f:
+            for item in sample_data:
+                f.write(json.dumps(item) + '\n')
+    
+    def _build_idf_scores(self) -> Dict[str, float]:
+        """Build IDF scores for terms in knowledge base"""
+        if not self.kb_records:
+            return {}
+        
+        term_doc_count = defaultdict(int)
+        total_docs = len(self.kb_records)
+        
+        for record in self.kb_records:
+            unique_terms = set(record.tokens)
+            for term in unique_terms:
+                term_doc_count[term] += 1
+        
+        # Calculate IDF scores
+        idf_scores = {}
+        for term, doc_count in term_doc_count.items():
+            idf_scores[term] = math.log((total_docs + 1) / (doc_count + 1)) + 1.0
+        
+        return idf_scores
