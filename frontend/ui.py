@@ -687,6 +687,27 @@ elif page == "📤 Upload Regulations":
                 else:
                     st.error("❌ Please complete metadata for all files before uploading")
 
+    # Supported regulations info
+    st.markdown("---")
+    st.markdown("### 📚 Currently Supported Regulations")
+    
+    regulations = [
+        {"name": "EU Digital Service Act (DSA)", "status": "✅ Active", "coverage": "EU"},
+        {"name": "California - Protecting Our Kids from Social Media Addiction Act", "status": "✅ Active", "coverage": "CA, US"},
+        {"name": "Florida - Online Protections for Minors", "status": "✅ Active", "coverage": "FL, US"},
+        {"name": "Utah Social Media Regulation Act", "status": "✅ Active", "coverage": "UT, US"},
+        {"name": "US NCMEC Reporting Requirements", "status": "✅ Active", "coverage": "US"},
+    ]
+    
+    for reg in regulations:
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            st.write(f"📋 **{reg['name']}**")
+        with col2:
+            st.write(reg['status'])
+        with col3:
+            st.write(reg['coverage'])
+
 # ================================================
 # Page 3: Analytics Dashboard (unchanged)
 # ================================================
