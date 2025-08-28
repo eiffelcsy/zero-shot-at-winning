@@ -91,6 +91,33 @@ class ScreeningAgent(BaseComplianceAgent):
                 "next_step": "validation"  # Skip to validation on error
             }
     
+    def _format_context_documents(self, context_documents: Any) -> str:
+        """Format context documents for the prompt"""
+        if not context_documents:
+            return "No additional context documents provided."
+        
+        if isinstance(context_documents, str):
+            return context_documents
+        
+        if isinstance(context_documents, list):
+            formatted_docs = []
+            for i, doc in enumerate(context_documents, 1):
+                if isinstance(doc, dict):
+                    title = doc.get("title", f"Document {i}")
+                    content = doc.get("content", str(doc))
+                    formatted_docs.append(f"**{title}**:\n{content}")
+                else:
+                    formatted_docs.append(f"**Document {i}**:\n{str(doc)}")
+            return "\n\n".join(formatted_docs)
+        
+        if isinstance(context_documents, dict):
+            formatted_docs = []
+            for key, value in context_documents.items():
+                formatted_docs.append(f"**{key}**:\n{str(value)}")
+            return "\n\n".join(formatted_docs)
+        
+        return str(context_documents)
+    
     def _enhance_result(self, result: Dict, original_state: Dict) -> Dict:
         """Add metadata and validation to screening result"""
         
