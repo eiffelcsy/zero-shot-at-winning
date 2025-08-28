@@ -1,16 +1,13 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import json
-import re
 from datetime import datetime
-
-import chromadb
 
 from .prompts.templates import build_research_prompt
 from .base import BaseComplianceAgent
-from .tools.jurisdiction_check import JurisdictionChecker
-from .tools.regulation_search import RegulationSearcher
-from .tools.risk_calculator import RiskCalculator
+from app.rag.ingestion.vector_storage import VectorStorage
+from app.rag.retrieval.query_processor import QueryProcessor
+from app.rag.retrieval.retriever import RAGRetriever
 
 
 class ResearchOutput(BaseModel):
@@ -20,25 +17,28 @@ class ResearchOutput(BaseModel):
     query_used: str
     confidence_score: float
 
-
 class ResearchAgent(BaseComplianceAgent):
-    """Research Agent - finds relevant regulations using ChromaDB knowledge base only"""
+    """Research Agent - finds relevant regulations using RAG system with ChromaDB"""
 
-    def __init__(self, chroma_host: str = "localhost", chroma_port: int = 8001, memory_overlay: str = ""):
+    def __init__(self, 
+                embedding_model: str = "text-embedding-3-large",
+                collection_name: str = "regulation_kb", 
+                memory_overlay: str = ""):
         super().__init__("ResearchAgent")
         self.memory_overlay = memory_overlay
         
-        # Initialize ChromaDB client
-        try:
-            self.chroma_client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
-        except Exception:
-            self.chroma_client = chromadb.PersistentClient(path="./chroma_db")
-
-        # Initialize ChromaDB tools
-        self.jurisdiction_checker = JurisdictionChecker(self.chroma_client)
-        self.regulation_searcher = RegulationSearcher(self.chroma_client)
-        self.risk_calculator = RiskCalculator(self.chroma_client)
-
+        # Initialize RAG components
+        self.vector_storage = VectorStorage(
+            embedding_model=embedding_model,
+            collection_name=collection_name
+        )
+        
+        # Initialize query processor (can be None for testing)
+        self.query_processor = QueryProcessor(llm=self.llm if hasattr(self, 'llm') else None)
+        
+        # Initialize retriever with ChromaDB collection
+        self.retriever = RAGRetriever(self.vector_storage.collection)
+        
         # Setup LangChain components
         self._setup_chain()
 
@@ -52,9 +52,8 @@ class ResearchAgent(BaseComplianceAgent):
         self.memory_overlay = new_memory_overlay
         self._setup_chain()
 
-
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """ChromaDB-only research process"""
+        """RAG-based research process using vector storage and retrieval"""
         try:
             # Extract screening analysis from state
             screening_analysis = state.get("screening_analysis", {})
@@ -62,40 +61,34 @@ class ResearchAgent(BaseComplianceAgent):
             if not screening_analysis:
                 raise ValueError("Missing screening analysis from previous agent")
 
-            # Extract key parameters
+            # Extract key parameters from screening
             geographic_scope = screening_analysis.get("geographic_scope", [])
             trigger_keywords = screening_analysis.get("trigger_keywords", [])
             age_sensitivity = screening_analysis.get("age_sensitivity", False)
             data_sensitivity = screening_analysis.get("data_sensitivity", "none")
+            feature_description = state.get("feature_description", "")
 
-            # Step 1: Check applicable jurisdictions using ChromaDB
-            applicable_jurisdictions = self.jurisdiction_checker.check_applicable_jurisdictions(
-                geographic_scope, trigger_keywords
+            # Step 1: Build search query from screening results
+            base_query = self._build_search_query(
+                feature_description, screening_analysis, trigger_keywords
             )
 
-            # Step 2: Extract compliance patterns and search regulations
-            compliance_patterns = self._extract_compliance_patterns(screening_analysis)
-            chroma_regulations = self.regulation_searcher.search_by_compliance_patterns(
-                compliance_patterns, geographic_scope
+            # Step 2: Expand query using QueryProcessor (if available)
+            expanded_query = await self._expand_query(base_query)
+
+            # Step 3: Retrieve relevant documents using RAG
+            retrieved_documents = await self._retrieve_documents(
+                expanded_query, geographic_scope, data_sensitivity
             )
 
-            # Step 3: Calculate enhanced risk assessment
-            risk_assessment = self.risk_calculator.calculate_compliance_risk(
-                feature_description=state.get("feature_description", ""),
-                geographic_scope=geographic_scope,
-                age_sensitivity=age_sensitivity,
-                data_sensitivity=data_sensitivity,
-                trigger_keywords=trigger_keywords
-            )
+            # Step 4: Extract candidates and evidence from retrieved docs
+            candidates = self._extract_candidates(retrieved_documents)
+            evidence = self._format_evidence(retrieved_documents)
 
-            # Step 4: Prepare data for LLM synthesis
-            candidates = self._format_candidates(applicable_jurisdictions)
-            evidence = chroma_regulations[:15]  # Top 15 evidence pieces
+            # Step 5: Calculate confidence based on retrieval quality
+            confidence_score = self._calculate_confidence(retrieved_documents, screening_analysis)
 
-            # Build search query for logging
-            search_query = " ".join(compliance_patterns + geographic_scope + trigger_keywords)
-
-            # Step 5: Use LLM for final synthesis
+            # Step 6: Use LLM for final synthesis
             llm_input = {
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
                 "evidence_found": json.dumps(evidence[:5], indent=2)  # Top 5 for LLM context
@@ -103,19 +96,12 @@ class ResearchAgent(BaseComplianceAgent):
 
             result = await self.safe_llm_call(llm_input)
 
-            # Step 6: Enhance result with ChromaDB insights
+            # Step 7: Enhance result with RAG insights
             result["evidence"] = evidence
             result["candidates"] = candidates
-            result["query_used"] = search_query
+            result["query_used"] = expanded_query
             result["agent"] = "ResearchAgent"
-            result["risk_assessment"] = risk_assessment
-            result["applicable_jurisdictions"] = applicable_jurisdictions
-
-            # Use ChromaDB risk assessment for confidence if available
-            if risk_assessment.get("confidence"):
-                result["confidence_score"] = risk_assessment["confidence"]
-            elif not isinstance(result.get("confidence_score"), (int, float)):
-                result["confidence_score"] = 0.7
+            result["confidence_score"] = confidence_score
 
             self.log_interaction(state, result)
 
@@ -126,8 +112,6 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_query": result["query_used"],
                 "research_confidence": result["confidence_score"],
                 "research_analysis": result,
-                "research_risk_assessment": risk_assessment,
-                "research_jurisdictions": applicable_jurisdictions,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
@@ -136,6 +120,148 @@ class ResearchAgent(BaseComplianceAgent):
         except Exception as e:
             self.logger.error(f"Research agent failed: {e}")
             return self._create_error_response(str(e))
+
+    def _build_search_query(self, feature_description: str, screening_analysis: Dict, 
+                            trigger_keywords: List[str]) -> str:
+        """Build comprehensive search query from inputs"""
+        query_parts = [feature_description]
+        
+        # Add compliance patterns based on screening
+        if screening_analysis.get("age_sensitivity"):
+            query_parts.append("children minors age verification parental consent")
+        
+        if screening_analysis.get("data_sensitivity") in ["T5", "T4"]:
+            query_parts.append("personal data privacy protection")
+        
+        if screening_analysis.get("compliance_required"):
+            query_parts.append("regulatory compliance legal requirements")
+        
+        # Add geographic context
+        geo_scope = screening_analysis.get("geographic_scope", [])
+        if geo_scope and geo_scope != ["unknown"]:
+            query_parts.extend(geo_scope)
+        
+        # Add trigger keywords
+        if trigger_keywords:
+            query_parts.extend(trigger_keywords)
+        
+        return " ".join(query_parts)
+
+    async def _expand_query(self, base_query: str) -> str:
+        """Expand query using QueryProcessor if available"""
+        try:
+            if self.query_processor and hasattr(self.query_processor, 'llm') and self.query_processor.llm:
+                expanded = await self.query_processor.expand_query(base_query)
+                return expanded if expanded else base_query
+        except Exception as e:
+            self.logger.warning(f"Query expansion failed: {e}")
+        
+        return base_query
+
+    async def _retrieve_documents(self, query: str, geographic_scope: List[str], 
+                                data_sensitivity: str) -> List[Dict[str, Any]]:
+        """Retrieve documents using RAG retriever"""
+        try:
+            # Generate embedding for query
+            query_embedding = self.vector_storage.embeddings.embed_query(query)
+            
+            # Build metadata filter for geographic scope
+            metadata_filter = {}
+            if geographic_scope and geographic_scope != ["unknown"]:
+                # Filter by jurisdiction if available in metadata
+                metadata_filter = {"geo_jurisdiction": {"$in": geographic_scope}}
+            
+            # Retrieve documents with or without filtering
+            if metadata_filter:
+                documents = self.retriever.retrieve_with_metadata_filter(
+                    query_embedding, metadata_filter, n_results=15
+                )
+            else:
+                documents = self.retriever.retrieve(query_embedding, n_results=15)
+            
+            return documents
+            
+        except Exception as e:
+            self.logger.error(f"Document retrieval failed: {e}")
+            return []
+
+    def _extract_candidates(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract regulation candidates from retrieved documents"""
+        candidates = []
+        seen_regulations = set()
+        
+        for doc in documents:
+            metadata = doc.get("metadata", {})
+            reg_code = metadata.get("regulation_code") or metadata.get("regulation_name")
+            
+            if reg_code and reg_code not in seen_regulations:
+                seen_regulations.add(reg_code)
+                
+                # Calculate score based on document distance/similarity
+                distance = doc.get("distance", 1.0)
+                score = max(0.0, 1.0 - distance) if distance is not None else 0.7
+                
+                candidates.append({
+                    "reg": reg_code,
+                    "why": f"Retrieved from regulatory knowledge base with relevance score {score:.2f}",
+                    "score": score
+                })
+        
+        # Sort by score descending
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        return candidates[:10]  # Top 10 candidates
+
+    def _format_evidence(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format retrieved documents as evidence"""
+        evidence = []
+        
+        for doc in documents:
+            metadata = doc.get("metadata", {})
+            distance = doc.get("distance", 1.0)
+            
+            # Convert distance to similarity score (0-10 scale)
+            score = max(0.0, 10.0 * (1.0 - distance)) if distance is not None else 7.0
+            
+            evidence_item = {
+                "reg": metadata.get("regulation_code", "UNKNOWN"),
+                "jurisdiction": metadata.get("geo_jurisdiction", "Unknown"),
+                "name": metadata.get("regulation_name", "Regulatory Document"),
+                "section": metadata.get("section", "General"),
+                "url": metadata.get("source_url", ""),
+                "excerpt": doc.get("document", "")[:500] + "..." if len(doc.get("document", "")) > 500 else doc.get("document", ""),
+                "score": score
+            }
+            evidence.append(evidence_item)
+        
+        return evidence
+
+    def _calculate_confidence(self, documents: List[Dict[str, Any]], 
+                            screening_analysis: Dict) -> float:
+        """Calculate confidence based on retrieval quality and screening alignment"""
+        if not documents:
+            return 0.1
+        
+        # Base confidence from document relevance
+        distances = [doc.get("distance", 1.0) for doc in documents if doc.get("distance") is not None]
+        if distances:
+            avg_distance = sum(distances) / len(distances)
+            base_confidence = max(0.1, 1.0 - avg_distance)
+        else:
+            base_confidence = 0.7
+        
+        # Adjust based on geographic scope alignment
+        geo_scope = screening_analysis.get("geographic_scope", [])
+        if geo_scope != ["unknown"]:
+            geo_match_count = 0
+            for doc in documents[:5]:  # Check top 5 docs
+                doc_jurisdiction = doc.get("metadata", {}).get("geo_jurisdiction", "")
+                if any(geo in doc_jurisdiction for geo in geo_scope):
+                    geo_match_count += 1
+            
+            if geo_match_count > 0:
+                base_confidence = min(0.95, base_confidence + 0.1 * (geo_match_count / 5))
+        
+        return round(base_confidence, 2)
 
     def _create_error_response(self, error_message: str) -> Dict[str, Any]:
         """Create standardized error response"""
@@ -151,44 +277,8 @@ class ResearchAgent(BaseComplianceAgent):
                 "confidence_score": 0.0,
                 "error": error_message
             },
-            "research_risk_assessment": {},
-            "research_jurisdictions": [],
             "research_error": error_message,
             "research_completed": True,
             "research_timestamp": datetime.now().isoformat(),
             "next_step": "validation"
         }
-
-    def _extract_compliance_patterns(self, screening_analysis: Dict) -> List[str]:
-        """Extract compliance patterns from screening analysis"""
-        patterns = []
-        
-        if screening_analysis.get("age_sensitivity"):
-            patterns.append("age_restrictions")
-        
-        if screening_analysis.get("data_sensitivity") in ["T5", "T4"]:
-            patterns.append("data_protection")
-        
-        if screening_analysis.get("compliance_required"):
-            patterns.extend(["content_governance", "platform_responsibilities"])
-        
-        # Always include geographic enforcement if scope is defined
-        if screening_analysis.get("geographic_scope", []) != ["unknown"]:
-            patterns.append("geographic_enforcement")
-        
-        return patterns
-
-    def _format_candidates(self, jurisdiction_results: List[Dict]) -> List[Dict]:
-        """Format jurisdiction results as regulation candidates"""
-        candidates = []
-        
-        for jur_result in jurisdiction_results:
-            reg_code = jur_result.get("regulation_code", "")
-            if reg_code:
-                candidates.append({
-                    "reg": reg_code,
-                    "why": f"Applicable to {jur_result.get('jurisdiction', 'jurisdiction')}",
-                    "score": jur_result.get("relevance_score", 0.5)
-                })
-        
-        return candidates

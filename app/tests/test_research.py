@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for ResearchAgent with mocked ChromaDB tools
+Unit tests for ResearchAgent with mocked RAG components
 """
 
 import unittest
@@ -15,120 +15,124 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+import sys
+from unittest.mock import MagicMock
+
+# Mock the missing modules
+sys.modules['chroma'] = MagicMock()
+sys.modules['chroma.chroma_connection'] = MagicMock()
+sys.modules['chroma.chroma_connection'].get_chroma_client = MagicMock(return_value=MagicMock())
+
+
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from app.agents.research import ResearchAgent, ResearchOutput
 
-class MockJurisdictionChecker:
-    """Mock ChromaDB jurisdiction checker"""
-    def __init__(self, client):
-        self.client = client
-        
-    def check_applicable_jurisdictions(self, geographic_scope, trigger_keywords):
-        """Return mock jurisdiction results"""
-        if "US" in geographic_scope or "California" in geographic_scope:
-            return [
-                {"regulation_code": "COPPA", "jurisdiction": "US", "relevance_score": 0.9},
-                {"regulation_code": "CA_SB976", "jurisdiction": "California", "relevance_score": 0.85}
-            ]
-        elif "EU" in geographic_scope:
-            return [
-                {"regulation_code": "GDPR", "jurisdiction": "EU", "relevance_score": 0.95}
-            ]
-        return []
+class MockVectorStorage:
+    """Mock RAG VectorStorage"""
+    def __init__(self, embedding_model="text-embedding-3-large", collection_name="regulation_kb"):
+        self.embedding_model = embedding_model
+        self.collection_name = collection_name
+        self.embeddings = MockEmbeddings()
+        self.collection = MagicMock()
 
-class MockRegulationSearcher:
-    """Mock ChromaDB regulation searcher"""
-    def __init__(self, client):
-        self.client = client
-        
-    def search_by_compliance_patterns(self, patterns, geographic_scope):
-        """Return mock regulation search results"""
-        results = []
-        
-        if "age_restrictions" in patterns:
-            results.extend([
+class MockEmbeddings:
+    """Mock OpenAI embeddings"""
+    def embed_query(self, text):
+        """Return mock embedding vector"""
+        return [0.1] * 1536  # Standard OpenAI embedding dimension
+
+    def embed_documents(self, texts):
+        """Return mock embedding vectors for multiple texts"""
+        return [[0.1] * 1536 for _ in texts]
+
+class MockQueryProcessor:
+    """Mock RAG QueryProcessor"""
+    def __init__(self, llm=None):
+        self.llm = llm
+    
+    async def expand_query(self, query):
+        """Return expanded query"""
+        return f"{query} regulatory compliance legal requirements"
+    
+    async def generate_multiple_queries(self, query, count=5):
+        """Return multiple query variations"""
+        return [f"{query} variation {i}" for i in range(count)]
+
+class MockRAGRetriever:
+    """Mock RAG Retriever"""
+    def __init__(self, collection):
+        self.collection = collection
+    
+    def retrieve(self, query_embedding, n_results=10, include=None):
+        """Return mock retrieved documents"""
+        if "age" in str(query_embedding) or n_results > 5:
+            return [
                 {
-                    "reg": "COPPA",
-                    "jurisdiction": "US",
-                    "name": "Children's Online Privacy Protection Act",
-                    "section": "Section 1304",
-                    "url": "https://www.coppa.gov",
-                    "excerpt": "Requires parental consent for data collection from children under 13",
-                    "score": 9.2
+                    'id': 'doc1',
+                    'document': 'Children under 13 require parental consent for data collection under COPPA regulations.',
+                    'metadata': {
+                        'regulation_code': 'COPPA',
+                        'geo_jurisdiction': 'US',
+                        'regulation_name': 'Children\'s Online Privacy Protection Act',
+                        'section': 'Section 1304'
+                    },
+                    'distance': 0.1
                 },
                 {
-                    "reg": "CA_SB976", 
-                    "jurisdiction": "California",
-                    "name": "California Age-Appropriate Design Code",
-                    "section": "Default Settings",
-                    "url": "https://leginfo.legislature.ca.gov",
-                    "excerpt": "Social media platforms must disable personalized feeds by default for users under 18",
-                    "score": 8.8
+                    'id': 'doc2', 
+                    'document': 'California requires default privacy settings for users under 18 per SB-976.',
+                    'metadata': {
+                        'regulation_code': 'CA_SB976',
+                        'geo_jurisdiction': 'California',
+                        'regulation_name': 'California Age-Appropriate Design Code',
+                        'section': 'Default Settings'
+                    },
+                    'distance': 0.15
                 }
-            ])
-        
-        if "data_protection" in patterns:
-            results.append({
-                "reg": "GDPR",
-                "jurisdiction": "EU", 
-                "name": "General Data Protection Regulation",
-                "section": "Article 8",
-                "url": "https://gdpr-info.eu",
-                "excerpt": "Processing of personal data of children requires parental consent",
-                "score": 9.5
-            })
-            
-        return results
-
-class MockRiskCalculator:
-    """Mock ChromaDB risk calculator"""
-    def __init__(self, client):
-        self.client = client
-        
-    def calculate_compliance_risk(self, feature_description, geographic_scope, 
-                                age_sensitivity, data_sensitivity, trigger_keywords):
-        """Return mock risk assessment"""
-        risk_score = 0.3  # Base risk
-        
-        if age_sensitivity:
-            risk_score += 0.4
-        if data_sensitivity in ["T5", "T4"]:
-            risk_score += 0.3
-        if any(geo in ["US", "California", "EU"] for geo in geographic_scope):
-            risk_score += 0.2
-            
-        risk_score = min(risk_score, 1.0)
-        
-        return {
-            "overall_risk_score": risk_score,
-            "risk_level": "HIGH" if risk_score > 0.7 else "MEDIUM" if risk_score > 0.4 else "LOW",
-            "compliance_required": risk_score > 0.6,
-            "confidence": 0.85,
-            "risk_factors": [
-                {"factor": "age_sensitivity", "score": 0.4 if age_sensitivity else 0.0},
-                {"factor": "data_sensitivity", "score": 0.3 if data_sensitivity in ["T5", "T4"] else 0.0}
             ]
-        }
+        else:
+            return [
+                {
+                    'id': 'doc3',
+                    'document': 'General data protection requirements for user privacy.',
+                    'metadata': {
+                        'regulation_code': 'GDPR',
+                        'geo_jurisdiction': 'EU',
+                        'regulation_name': 'General Data Protection Regulation',
+                        'section': 'Article 6'
+                    },
+                    'distance': 0.3
+                }
+            ]
+    
+    def retrieve_with_metadata_filter(self, query_embedding, metadata_filter, n_results=10, include=None):
+        """Return filtered mock documents"""
+        # Simulate filtering by jurisdiction
+        if 'geo_jurisdiction' in metadata_filter:
+            jurisdictions = metadata_filter['geo_jurisdiction'].get('$in', [])
+            if 'US' in jurisdictions or 'California' in jurisdictions:
+                return self.retrieve(query_embedding, n_results, include)[:2]  # US results
+            elif 'EU' in jurisdictions:
+                return self.retrieve(query_embedding, n_results, include)[-1:]  # EU results
+        
+        return self.retrieve(query_embedding, n_results, include)
 
 class TestResearchAgent(unittest.TestCase):
     
-    @patch('chromadb.HttpClient')
-    @patch('app.agents.research.JurisdictionChecker', MockJurisdictionChecker)
-    @patch('app.agents.research.RegulationSearcher', MockRegulationSearcher) 
-    @patch('app.agents.research.RiskCalculator', MockRiskCalculator)
-    def setUp(self, mock_chroma):
-        """Setup test fixtures with mocked ChromaDB"""
-        mock_chroma.return_value = MagicMock()
+    @patch('app.rag.ingestion.vector_storage.VectorStorage', MockVectorStorage)
+    @patch('app.rag.retrieval.query_processor.QueryProcessor', MockQueryProcessor)
+    @patch('app.rag.retrieval.retriever.RAGRetriever', MockRAGRetriever)
+    def setUp(self):
+        """Setup test fixtures with mocked RAG components"""
         self.agent = ResearchAgent()
     
     def test_init_with_memory_overlay(self):
         """Test agent initialization with memory overlay"""
-        with patch('chromadb.HttpClient'), \
-             patch('app.agents.research.JurisdictionChecker', MockJurisdictionChecker), \
-             patch('app.agents.research.RegulationSearcher', MockRegulationSearcher), \
-             patch('app.agents.research.RiskCalculator', MockRiskCalculator):
+        with patch('app.rag.ingestion.vector_storage.VectorStorage', MockVectorStorage), \
+             patch('app.rag.retrieval.query_processor.QueryProcessor', MockQueryProcessor), \
+             patch('app.rag.retrieval.retriever.RAGRetriever', MockRAGRetriever):
             
             memory = "TEST RESEARCH MEMORY"
             agent = ResearchAgent(memory_overlay=memory)
@@ -136,64 +140,101 @@ class TestResearchAgent(unittest.TestCase):
             self.assertEqual(agent.memory_overlay, memory)
             self.assertEqual(agent.name, "ResearchAgent")
     
-    def test_extract_compliance_patterns(self):
-        """Test compliance pattern extraction from screening analysis"""
+    def test_build_search_query(self):
+        """Test search query building from screening analysis"""
+        feature_description = "Location sharing for teens"
         screening_analysis = {
             "age_sensitivity": True,
             "data_sensitivity": "T5", 
             "compliance_required": True,
             "geographic_scope": ["US", "California"]
         }
+        trigger_keywords = ["minors", "location", "privacy"]
         
-        patterns = self.agent._extract_compliance_patterns(screening_analysis)
+        query = self.agent._build_search_query(feature_description, screening_analysis, trigger_keywords)
         
-        expected_patterns = [
-            "age_restrictions",
-            "data_protection", 
-            "content_governance",
-            "platform_responsibilities",
-            "geographic_enforcement"
+        self.assertIn("Location sharing for teens", query)
+        self.assertIn("children minors age verification", query)
+        self.assertIn("personal data privacy protection", query)
+        self.assertIn("regulatory compliance legal requirements", query)
+        self.assertIn("US", query)
+        self.assertIn("California", query)
+        self.assertIn("minors", query)
+    
+    def test_extract_candidates(self):
+        """Test candidate extraction from retrieved documents"""
+        mock_documents = [
+            {
+                'metadata': {'regulation_code': 'COPPA', 'geo_jurisdiction': 'US'},
+                'distance': 0.1
+            },
+            {
+                'metadata': {'regulation_code': 'CA_SB976', 'geo_jurisdiction': 'California'},
+                'distance': 0.15
+            }
         ]
         
-        for pattern in expected_patterns:
-            self.assertIn(pattern, patterns)
-    
-    def test_extract_compliance_patterns_minimal(self):
-        """Test pattern extraction with minimal compliance requirements"""
-        screening_analysis = {
-            "age_sensitivity": False,
-            "data_sensitivity": "T2",
-            "compliance_required": False, 
-            "geographic_scope": ["unknown"]
-        }
-        
-        patterns = self.agent._extract_compliance_patterns(screening_analysis)
-        
-        # Should not have age_restrictions or data_protection
-        self.assertNotIn("age_restrictions", patterns)
-        self.assertNotIn("data_protection", patterns)
-        self.assertNotIn("content_governance", patterns)
-        # Should not have geographic_enforcement for unknown scope
-        self.assertNotIn("geographic_enforcement", patterns)
-    
-    def test_format_candidates(self):
-        """Test formatting of jurisdiction results into candidates"""
-        jurisdiction_results = [
-            {"regulation_code": "COPPA", "jurisdiction": "US", "relevance_score": 0.9},
-            {"regulation_code": "GDPR", "jurisdiction": "EU", "relevance_score": 0.85}
-        ]
-        
-        candidates = self.agent._format_candidates(jurisdiction_results)
+        candidates = self.agent._extract_candidates(mock_documents)
         
         self.assertEqual(len(candidates), 2)
         
         coppa_candidate = next(c for c in candidates if c["reg"] == "COPPA")
-        self.assertEqual(coppa_candidate["why"], "Applicable to US")
-        self.assertEqual(coppa_candidate["score"], 0.9)
+        self.assertIn("relevance score", coppa_candidate["why"])
+        self.assertAlmostEqual(coppa_candidate["score"], 0.9, places=1)
         
-        gdpr_candidate = next(c for c in candidates if c["reg"] == "GDPR")
-        self.assertEqual(gdpr_candidate["why"], "Applicable to EU") 
-        self.assertEqual(gdpr_candidate["score"], 0.85)
+        sb976_candidate = next(c for c in candidates if c["reg"] == "CA_SB976")
+        self.assertIn("relevance score", sb976_candidate["why"])
+        self.assertAlmostEqual(sb976_candidate["score"], 0.85, places=1)
+    
+    def test_format_evidence(self):
+        """Test evidence formatting from retrieved documents"""
+        mock_documents = [
+            {
+                'id': 'doc1',
+                'document': 'Test regulation content about child privacy protection.',
+                'metadata': {
+                    'regulation_code': 'COPPA',
+                    'geo_jurisdiction': 'US',
+                    'regulation_name': 'Children\'s Online Privacy Protection Act',
+                    'section': 'Section 1304'
+                },
+                'distance': 0.1
+            }
+        ]
+        
+        evidence = self.agent._format_evidence(mock_documents)
+        
+        self.assertEqual(len(evidence), 1)
+        evidence_item = evidence[0]
+        
+        self.assertEqual(evidence_item["reg"], "COPPA")
+        self.assertEqual(evidence_item["jurisdiction"], "US")
+        self.assertEqual(evidence_item["name"], "Children's Online Privacy Protection Act")
+        self.assertEqual(evidence_item["section"], "Section 1304")
+        self.assertIn("child privacy protection", evidence_item["excerpt"])
+        self.assertGreater(evidence_item["score"], 8.0)
+    
+    def test_calculate_confidence(self):
+        """Test confidence calculation from retrieval quality"""
+        # High quality documents (low distance)
+        high_quality_docs = [
+            {'distance': 0.1, 'metadata': {'geo_jurisdiction': 'US'}},
+            {'distance': 0.15, 'metadata': {'geo_jurisdiction': 'California'}}
+        ]
+        
+        screening_analysis = {"geographic_scope": ["US", "California"]}
+        
+        confidence = self.agent._calculate_confidence(high_quality_docs, screening_analysis)
+        self.assertGreater(confidence, 0.8)
+        
+        # Lower quality documents (higher distance)
+        low_quality_docs = [
+            {'distance': 0.8, 'metadata': {'geo_jurisdiction': 'Unknown'}},
+            {'distance': 0.9, 'metadata': {'geo_jurisdiction': 'Unknown'}}
+        ]
+        
+        confidence = self.agent._calculate_confidence(low_quality_docs, screening_analysis)
+        self.assertLess(confidence, 0.5)
     
     @patch('app.agents.research.ResearchAgent.safe_llm_call')
     async def test_process_success_high_risk(self, mock_llm):
@@ -215,7 +256,7 @@ class TestResearchAgent(unittest.TestCase):
                     "score": 9.2
                 }
             ],
-            "query_used": "age_restrictions data_protection US California minors T5",
+            "query_used": "minors age verification regulatory compliance legal requirements",
             "confidence_score": 0.88
         }
         
@@ -246,11 +287,6 @@ class TestResearchAgent(unittest.TestCase):
         self.assertGreater(len(analysis["candidates"]), 0)
         self.assertGreater(len(analysis["evidence"]), 0)
         self.assertGreater(analysis["confidence_score"], 0.0)
-        
-        # Check risk assessment
-        risk_assessment = result["research_risk_assessment"]
-        self.assertEqual(risk_assessment["risk_level"], "HIGH")
-        self.assertTrue(risk_assessment["compliance_required"])
     
     async def test_process_missing_screening(self):
         """Test error handling when screening analysis is missing"""
@@ -289,6 +325,26 @@ class TestResearchAgent(unittest.TestCase):
         analysis = result["research_analysis"] 
         self.assertEqual(analysis["confidence_score"], 0.0)
         self.assertIn("LLM API Error", analysis["error"])
+    
+    @patch('app.agents.research.ResearchAgent._expand_query')
+    async def test_query_expansion(self, mock_expand):
+        """Test query expansion functionality"""
+        mock_expand.return_value = "expanded query with regulatory terms"
+        
+        state = {
+            "feature_description": "basic feature",
+            "screening_analysis": {
+                "geographic_scope": ["US"],
+                "trigger_keywords": ["data"],
+                "age_sensitivity": False,
+                "data_sensitivity": "T3"
+            }
+        }
+        
+        await self.agent.process(state)
+        
+        # Verify query expansion was called
+        mock_expand.assert_called_once()
 
 class AsyncTestCase(unittest.TestCase):
     """Base class for async test methods"""
@@ -305,12 +361,11 @@ class AsyncTestCase(unittest.TestCase):
 # Sync versions of async tests for unittest compatibility
 class TestResearchAgentSync(AsyncTestCase):
     
-    @patch('chromadb.HttpClient')
-    @patch('app.agents.research.JurisdictionChecker', MockJurisdictionChecker)
-    @patch('app.agents.research.RegulationSearcher', MockRegulationSearcher)
-    @patch('app.agents.research.RiskCalculator', MockRiskCalculator)
-    def setUp(self, mock_chroma):
-        mock_chroma.return_value = MagicMock()
+    @patch('app.rag.ingestion.vector_storage.VectorStorage', MockVectorStorage)
+    @patch('app.rag.retrieval.query_processor.QueryProcessor', MockQueryProcessor)
+    @patch('app.rag.retrieval.retriever.RAGRetriever', MockRAGRetriever)
+    def setUp(self):
+        """Setup with mocked RAG components"""
         self.agent = ResearchAgent()
     
     @patch('app.agents.research.ResearchAgent.safe_llm_call')
@@ -328,7 +383,7 @@ class TestResearchAgentSync(AsyncTestCase):
                 "excerpt": "Parental consent required",
                 "score": 9.0
             }],
-            "query_used": "age_restrictions US",
+            "query_used": "minors regulatory compliance legal requirements",
             "confidence_score": 0.85
         }
         
