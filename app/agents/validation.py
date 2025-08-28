@@ -3,7 +3,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field, HttpUrl
 from .base import BaseComplianceAgent
-from prompts.templates import TIKTOK_CONTEXT
+from prompts.templates import build_validation_prompt
 from typing import Dict, Any, List, Literal
 from datetime import datetime
 import json
@@ -30,56 +30,7 @@ class ValidationAgent(BaseComplianceAgent):
     
     def _setup_chain(self):
         """Setup LangChain prompt and parser"""
-        prompt_template = TIKTOK_CONTEXT + """
-
-FEATURE ANALYSIS TO VALIDATE:
-Feature Name: {feature_name}
-Feature Description: {feature_description}
-
-SCREENING AGENT ANALYSIS:
-{screening_analysis}
-
-RESEARCH AGENT EVIDENCE:
-{research_evidence}
-
-VALIDATION TASK:
-You are the final decision-maker. Based on the screening analysis and research evidence, determine:
-1. Does this feature need geo-specific compliance logic? (YES/NO/REVIEW)
-2. Provide clear reasoning citing the evidence
-3. List related regulations with proper citations
-
-DECISION CRITERIA:
-- YES: Feature enforces different behavior by region due to legal requirements
-- NO: Feature is business-driven or has no legal geo-requirements  
-- REVIEW: Insufficient evidence or ambiguous requirements
-
-EVIDENCE REQUIREMENTS:
-- Only cite regulations that appear in the research evidence
-- Include specific excerpts that support your decision
-- If evidence is thin or contradictory, choose REVIEW
-
-Return ONLY valid JSON:
-{{
-    "needs_geo_logic": "YES|NO|REVIEW",
-    "reasoning": "detailed explanation citing specific evidence",
-    "related_regulations": [
-        {{
-            "name": "regulation name",
-            "jurisdiction": "jurisdiction",
-            "section": "specific section", 
-            "url": "regulation URL",
-            "evidence_excerpt": "supporting text from research"
-        }}
-    ],
-    "confidence_score": 0.85
-}}
-"""
-        
-        self.prompt_template = PromptTemplate(
-            input_variables=["feature_name", "feature_description", "screening_analysis", "research_evidence"],
-            template=prompt_template
-        )
-        
+        self.prompt_template = build_validation_prompt("")
         self.output_parser = JsonOutputParser(pydantic_object=ValidationOutput)
         self.chain = self.prompt_template | self.llm | self.output_parser
     

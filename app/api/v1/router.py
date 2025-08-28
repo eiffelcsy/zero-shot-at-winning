@@ -37,6 +37,10 @@ pipeline = PDFIngestionPipeline(
     collection_name="regulation_kb"
 )
 
+# ================================================
+# REGULATION UPLOAD ENDPOINTS
+# ================================================
+
 @router.post("/upload-pdfs", response_model=UploadResponse)
 async def upload_pdf_files(
     files: List[UploadFile] = File(...),

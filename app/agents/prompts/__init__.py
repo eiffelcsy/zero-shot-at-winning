@@ -1,25 +1,13 @@
-"""
-Prompt templates for compliance agents
-"""
-
 from .templates import (
-    TIKTOK_CONTEXT,
-    SCREENING_PROMPT,
-    RESEARCH_PROMPT,
-    SCREENING_PROMPT,
-    RESEARCH_PROMPT,
-    VALIDATION_PROMPT,
-    VALIDATION_PROMPT,
-    COMPLIANCE_OUTPUT_SCHEMA
+    build_screening_prompt,
+    build_research_prompt,
+    build_validation_prompt,
+    TIKTOK_CONTEXT
 )
 
 __all__ = [
-    "TIKTOK_CONTEXT",
-    "SCREENING_PROMPT",
-    "RESEARCH_PROMPT",
-    "SCREENING_PROMPT",
-    "RESEARCH_PROMPT",
-    "VALIDATION_PROMPT",
-    "VALIDATION_PROMPT",
-    "COMPLIANCE_OUTPUT_SCHEMA"
+    "build_screening_prompt",
+    "build_research_prompt", 
+    "build_validation_prompt",
+    "TIKTOK_CONTEXT"
 ]
