@@ -4,9 +4,10 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field, HttpUrl
 from .base import BaseComplianceAgent
 from .prompts.templates import build_validation_prompt
+from .memory_pg import PostgresMemoryStore
 from typing import Dict, Any, List, Literal
 from datetime import datetime
-import json
+import json, os, sys
 
 class RelatedRegulation(BaseModel):
     name: str = Field(description="Regulation name")
@@ -25,9 +26,25 @@ class ValidationAgent(BaseComplianceAgent):
     """Final decision-maker agent - validates compliance requirements"""
     
     def __init__(self, memory_overlay: str = ""):
-        super().__init__("ValidationAgent", temperature=0.0)  # Low temperature for consistency
+        super().__init__("ValidationAgent", temperature=0.0)
+
+        if memory_overlay:
+            # user provided overlay -> skip DB
+            self.store = None
+            self.memory_overlay = memory_overlay
+        else:
+            # lazy import and robust init; disable vectors for tests to avoid API key deps
+            from .memory_pg import PostgresMemoryStore
+            try:
+                self.store = PostgresMemoryStore(os.getenv("PG_CONN_STRING"), use_vectors=False)
+                self.memory_overlay = self.store.render_overlay_for("validation")
+            except Exception as e:
+                # fall back cleanly
+                self.store = None
+                self.memory_overlay = ""
+                self.logger.warning(f"ValidationAgent: memory store unavailable, continuing without overlay ({e})")
+
         self._setup_chain()
-        self.memory_overlay = memory_overlay
     
     def _setup_chain(self):
         """Setup LangChain prompt and parser"""
