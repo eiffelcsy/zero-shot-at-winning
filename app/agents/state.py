@@ -16,11 +16,11 @@ class ComplianceState(TypedDict):
     screening_completed: Optional[bool]
     screening_timestamp: Optional[str]
     
-    # Research agent outputs  
-    research_evidence: Optional[List[Dict]]
-    research_candidates: Optional[List[Dict]]
-    research_query: Optional[str]
+    # Research agent outputs - updated to match research.py naming
+    research_regulations: Optional[List[Dict[str, Any]]]
+    research_queries: Optional[List[str]]
     research_confidence: Optional[float]
+    research_retrieved_documents: Optional[List[Dict[str, Any]]]
     research_analysis: Optional[Dict[str, Any]]
     research_completed: Optional[bool]
     research_timestamp: Optional[str]
@@ -81,9 +81,9 @@ class ScreeningResult(BaseModel):
 
 
 class ResearchResult(BaseModel):
-    """Typed model for research agent results"""
+    """Typed model for research agent results - updated to match research.py naming"""
     agent: str
-    candidates: List[Dict[str, Any]]
+    regulations: List[Dict[str, Any]]  # Changed from candidates
     evidence: List[Dict[str, Any]]
     query_used: str
     confidence_score: float
@@ -134,10 +134,11 @@ def create_initial_state(
         screening_completed=None,
         screening_timestamp=None,
         
-        research_evidence=None,
-        research_candidates=None,
-        research_query=None,
+        # Updated research field names to match research.py
+        research_regulations=None,
+        research_queries=None,
         research_confidence=None,
+        research_retrieved_documents=None,
         research_analysis=None,
         research_completed=None,
         research_timestamp=None,
@@ -202,8 +203,9 @@ def get_workflow_summary(state: ComplianceState) -> Dict[str, Any]:
         summary["final_risk_level"] = state["screening_analysis"].get("risk_level")
         summary["compliance_required"] = state["screening_analysis"].get("compliance_required")
     
+    # Updated to use new field names
     if state.get("research_analysis"):
-        summary["regulations_found"] = len(state["research_analysis"].get("candidates", []))
+        summary["regulations_found"] = len(state["research_analysis"].get("regulations", []))
         summary["evidence_pieces"] = len(state["research_analysis"].get("evidence", []))
     
     summary["overall_confidence"] = state.get("confidence_score")

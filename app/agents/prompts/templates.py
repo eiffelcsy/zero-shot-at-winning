@@ -49,16 +49,16 @@ You have received the following information:
 ## Output Requirements
 Return ONLY valid JSON matching this schema:
 {{
-   "agent": "ScreeningAgent",
-   "risk_level": "LOW|MEDIUM|HIGH",
-   "compliance_required": true/false,
-   "confidence": 0.0-1.0,
-   "trigger_keywords": ["keyword1", "keyword2"],
-   "reasoning": "detailed explanation",
-   "needs_research": true/false,
-   "geographic_scope": ["region1", "region2"] or "global" or "unknown",
-   "age_sensitivity": true/false,
-   "data_sensitivity": "T5|T4|T3|T2|T1|none"
+    "agent": "ScreeningAgent",
+    "risk_level": "LOW|MEDIUM|HIGH",
+    "compliance_required": true/false,
+    "confidence": 0.0-1.0,
+    "trigger_keywords": ["keyword1", "keyword2"],
+    "reasoning": "detailed explanation",
+    "needs_research": true/false,
+    "geographic_scope": ["region1", "region2"] or "global" or "unknown",
+    "age_sensitivity": true/false,
+"data_sensitivity": "T5|T4|T3|T2|T1|none"
 }}
 
 ## Comprehensive Reasoning Framework
