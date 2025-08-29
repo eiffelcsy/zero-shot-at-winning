@@ -8,7 +8,6 @@ import json
 # Page configuration - must be first Streamlit command
 st.set_page_config(
     page_title="TikTok Geo-Compliance System",
-    page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -22,7 +21,7 @@ def load_css(file_name):
 try:
     load_css('frontend/static/styles.css')
 except FileNotFoundError:
-    st.warning("⚠️ External CSS file not found. Using inline styles.")
+    st.warning("External CSS file not found. Using inline styles.")
     # Add minimal inline CSS for basic functionality
     st.markdown("""
     <style>
@@ -152,23 +151,23 @@ with st.sidebar:
     # Sidebar header with logo
     st.markdown("""
         <div class="sidebar-logo">
-            <h2>⚖️ TikTok</h2>
+            <h2>TikTok</h2>
             <p style="color: rgba(255,255,255,0.8); margin: 0.5rem 0 0 0; font-size: 0.9rem;">Geo-Compliance System</p>
         </div>
     """, unsafe_allow_html=True)
     
     # Navigation menu with enhanced styling
-    st.markdown("### 🧭 Navigation")
+    st.markdown("### Navigation")
     
     page = st.radio(
         "Select Page:",
-        ["🔍 Compliance Checker", "📤 Upload Regulations", "📊 Analytics Dashboard"],
+        ["Compliance Checker", "Upload Regulations", "Analytics Dashboard"],
         label_visibility="collapsed"
     )
     
     # Quick stats in sidebar
     st.markdown("---")
-    st.markdown("### 📈 Quick Stats")
+    st.markdown("### Quick Stats")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -191,8 +190,8 @@ with st.sidebar:
     
     # Help section
     st.markdown("---")
-    st.markdown("### ❓ Need Help?")
-    with st.expander("📘 How to Use"):
+    st.markdown("### Need Help?")
+    with st.expander("How to Use"):
         st.markdown("""
         **Compliance Checker:**
         1. Enter feature name and description
@@ -223,7 +222,7 @@ with st.sidebar:
 # ================================================
 # Page 1: Enhanced Compliance Checker
 # ================================================
-if page == "🔍 Compliance Checker":
+if page == "Compliance Checker":
     # Main header
     st.markdown("""
         <div class="main-header">
@@ -233,7 +232,7 @@ if page == "🔍 Compliance Checker":
     """, unsafe_allow_html=True)
     
     # Input section
-    st.markdown("### 📝 Feature Analysis Input")
+    st.markdown("### Feature Analysis Input")
     
     # Enhanced input form with document upload
     title = st.text_input(
@@ -248,7 +247,7 @@ if page == "🔍 Compliance Checker":
         placeholder="e.g. To comply with the Utah Social Media Regulation Act, we are implementing a curfew-based login restriction for users under 18...",
         help="Provide detailed description including functionality, data usage, and geographic considerations"
     )
-    st.markdown("#### 📎 Optional Feature Documentation")
+    st.markdown("#### Optional Feature Documentation")
     feature_document = st.file_uploader(
         "Upload Feature Document",
         type=["pdf", "txt", "docx", "md"],
@@ -256,7 +255,7 @@ if page == "🔍 Compliance Checker":
     )
     
     if feature_document:
-        st.success(f"✅ {feature_document.name} uploaded ({feature_document.size:,} bytes)")
+        st.success(f"{feature_document.name} uploaded ({feature_document.size:,} bytes)")
     
     # Analysis button
     analyze_button = st.button("🚀 Analyze Compliance", use_container_width=True, type="primary")
@@ -276,7 +275,7 @@ if page == "🔍 Compliance Checker":
                     result = check_compliance(title, description, feature_document)
                     
                     if "error" in result:
-                        st.error(f"❌ Error: {result}")
+                        st.error(f"Error: {result}")
                     else:
                         # Generate analysis ID for feedback tracking
                         analysis_id = f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.analysis_history)}"
@@ -299,18 +298,18 @@ if page == "🔍 Compliance Checker":
                         
                         # Results display
                         st.markdown("---")
-                        st.markdown("## 📊 Analysis Results")
+                        st.markdown("## Analysis Results")
                         
                         # Agent processing status
-                        st.markdown("### 🤖 Multi-Agent System Status")
+                        st.markdown("### Multi-Agent System Status")
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            st.markdown('<span class="agent-status agent-complete">🔍 Screening Agent: Complete</span>', unsafe_allow_html=True)
+                            st.markdown('<span class="agent-status agent-complete">Screening Agent: Complete</span>', unsafe_allow_html=True)
                         with col2:
-                            st.markdown('<span class="agent-status agent-complete">📚 Research Agent: Complete</span>', unsafe_allow_html=True)
+                            st.markdown('<span class="agent-status agent-complete">Research Agent: Complete</span>', unsafe_allow_html=True)
                         with col3:
-                            st.markdown('<span class="agent-status agent-complete">✅ Validation Agent: Complete</span>', unsafe_allow_html=True)
+                            st.markdown('<span class="agent-status agent-complete">Validation Agent: Complete</span>', unsafe_allow_html=True)
                         
                         st.markdown("---")
                         
@@ -319,19 +318,19 @@ if page == "🔍 Compliance Checker":
                         if flag.lower() == "yes":
                             st.markdown("""
                                 <div class="success-badge">
-                                    ✅ Feature REQUIRES geo-specific compliance logic
+                                    Feature REQUIRES geo-specific compliance logic
                                 </div>
                             """, unsafe_allow_html=True)
                         else:
                             st.markdown("""
                                 <div class="info-badge">
-                                    ℹ️ Feature does NOT require geo-specific compliance logic
+                                    Feature does NOT require geo-specific compliance logic
                                 </div>
                             """, unsafe_allow_html=True)
                         
                         # Document processing status
                         if feature_document:
-                            st.markdown(f"📎 **Document Processed:** {feature_document.name} included in analysis")
+                            st.markdown(f"**Document Processed:** {feature_document.name} included in analysis")
                         
                         # Detailed results in columns
                         col1, col2 = st.columns(2)
@@ -341,29 +340,29 @@ if page == "🔍 Compliance Checker":
                             confidence = result.get("confidence_score", 0.0)
                             risk_level = result.get("risk_level", "Unknown")
                             
-                            st.markdown("#### 🎯 Confidence Score")
+                            st.markdown("#### Confidence Score")
                             st.progress(confidence)
                             st.markdown(f"**{confidence:.1%}** confidence in analysis")
                             
-                            st.markdown("#### ⚠️ Risk Level")
+                            st.markdown("#### Risk Level")
                             risk_color = "🔴" if risk_level == "High" else "🟡" if risk_level == "Medium" else "🟢"
                             st.markdown(f"{risk_color} **{risk_level}** Risk")
                         
                         with col2:
                             # Reasoning
-                            st.markdown("#### 📄 Analysis Reasoning")
+                            st.markdown("#### Analysis Reasoning")
                             st.info(result.get("reasoning", "No reasoning provided"))
                         
                         # Related Regulations
                         related_regs = result.get("related_regulations", [])
                         if related_regs:
-                            st.markdown("#### 📚 Related Regulations")
+                            st.markdown("#### Related Regulations")
                             for i, reg in enumerate(related_regs, 1):
                                 st.markdown(f"**{i}.** {reg}")
                         
                         # Enhanced Feedback Section
                         st.markdown("---")
-                        st.markdown("### 🎯 Help Improve Our Multi-Agent System")
+                        st.markdown("### Help Improve Our Multi-Agent System")
                         
                         # Initialize feedback state for this analysis
                         feedback_key = f"feedback_{analysis_id}"
@@ -412,7 +411,7 @@ if page == "🔍 Compliance Checker":
                                 if feedback_state['type'] == 'negative':
                                     st.markdown("""
                                         <div class="feedback-section required-feedback">
-                                            <h4>❌ Help Us Understand What Went Wrong</h4>
+                                            <h4>Help Us Understand What Went Wrong</h4>
                                             <p><strong>This feedback is required</strong> to help our agents learn from mistakes.</p>
                                         </div>
                                     """, unsafe_allow_html=True)
@@ -441,7 +440,7 @@ if page == "🔍 Compliance Checker":
                                             key=f"correct_risk_{analysis_id}"
                                         )
                                     
-                                    if st.button(f"📝 Submit Correction (Required)", key=f"submit_correction_{analysis_id}", 
+                                    if st.button(f"Submit Correction (Required)", key=f"submit_correction_{analysis_id}", 
                                                disabled=not correction_text.strip(), type="primary"):
                                         correction_data = {
                                             "correct_flag": "yes" if "Yes" in correct_flag else "no",
@@ -466,7 +465,7 @@ if page == "🔍 Compliance Checker":
                                 elif feedback_state['type'] == 'needs_context':
                                     st.markdown("""
                                         <div class="feedback-section required-feedback">
-                                            <h4>🤔 Help Us Improve Context Understanding</h4>
+                                            <h4>Help Us Improve Context Understanding</h4>
                                             <p><strong>This feedback is required</strong> to help our agents provide better analysis.</p>
                                         </div>
                                     """, unsafe_allow_html=True)
@@ -485,7 +484,7 @@ if page == "🔍 Compliance Checker":
                                         
                                         if "error" not in feedback_result:
                                             feedback_state['submitted'] = True
-                                            st.success("🚀 Context submitted! This will help improve future analyses.")
+                                            st.success("Context submitted! This will help improve future analyses.")
                                             st.rerun()
                                         else:
                                             st.error(f"Failed to submit feedback: {feedback_result['error']}")
@@ -495,21 +494,21 @@ if page == "🔍 Compliance Checker":
                             if feedback_state['type'] == 'positive':
                                 st.markdown("""
                                     <div class="feedback-section">
-                                        <h4>✅ Thanks for the positive feedback!</h4>
+                                        <h4>Thanks for the positive feedback!</h4>
                                         <p>Your confirmation helps our agents learn successful analysis patterns.</p>
                                     </div>
                                 """, unsafe_allow_html=True)
                             else:
                                 st.markdown("""
                                     <div class="feedback-section">
-                                        <h4>🚀 Feedback Submitted Successfully!</h4>
+                                        <h4>Feedback Submitted Successfully!</h4>
                                         <p>Thank you for helping improve our multi-agent system.</p>
                                     </div>
                                 """, unsafe_allow_html=True)
                         
                         # Export options
                         st.markdown("---")
-                        st.markdown("### 📊 Export Analysis")
+                        st.markdown("### Export Analysis")
                         
                         col1, col2, col3 = st.columns(3)
                         
@@ -519,7 +518,7 @@ if page == "🔍 Compliance Checker":
                             csv_data += f'"{analysis_id}","{title}","{description}","{feature_document is not None}","{flag}",{confidence},"{risk_level}","{result.get("reasoning", "")}"'
                             
                             st.download_button(
-                                label="📊 Download CSV Report",
+                                label="Download CSV Report",
                                 data=csv_data,
                                 file_name=f"compliance_report_{analysis_id}.csv",
                                 mime="text/csv",
@@ -536,7 +535,7 @@ if page == "🔍 Compliance Checker":
                             }
                             json_data = json.dumps(export_data, indent=2)
                             st.download_button(
-                                label="📋 Download JSON Report",
+                                label="Download JSON Report",
                                 data=json_data,
                                 file_name=f"compliance_analysis_{analysis_id}.json",
                                 mime="application/json",
@@ -544,7 +543,7 @@ if page == "🔍 Compliance Checker":
                             )
                         
                         with col3:
-                            if st.button("🔄 Analyze Another Feature", use_container_width=True):
+                            if st.button("Analyze Another Feature", use_container_width=True):
                                 # Clear current analysis state
                                 st.session_state.current_analysis_id = None
                                 st.rerun()
@@ -552,23 +551,23 @@ if page == "🔍 Compliance Checker":
                 except Exception as e:
                     st.markdown(f"""
                         <div class="warning-badge">
-                            ❌ Error during analysis: {str(e)}
+                            Error during analysis: {str(e)}
                         </div>
                     """, unsafe_allow_html=True)
 
 # ================================================
 # Page 2: Upload Regulations (unchanged)
 # ================================================
-elif page == "📤 Upload Regulations":
+elif page == "Upload Regulations":
     st.markdown("""
         <div class="main-header">
-            <h1>📤 Upload Regulations</h1>
+            <h1>Upload Regulations</h1>
             <p>Upload PDF regulation documents to enhance the compliance knowledge base</p>
         </div>
     """, unsafe_allow_html=True)
     
     # Upload interface
-    st.markdown("### 📁 Upload Regulation Documents")
+    st.markdown("### Upload Regulation Documents")
     
     # File uploader with enhanced styling
     uploaded_files = st.file_uploader(
@@ -580,7 +579,7 @@ elif page == "📤 Upload Regulations":
     
     # Metadata input fields for regulation documents
     if uploaded_files:
-        st.markdown("### 📋 Document Metadata")
+        st.markdown("### Document Metadata")
         st.markdown("Please provide metadata for each uploaded regulation document:")
         
         # Initialize metadata storage in session state
@@ -599,7 +598,7 @@ elif page == "📤 Upload Regulations":
                     'geo_jurisdiction': ''
                 }
             
-            with st.expander(f"📄 {uploaded_file.name}", expanded=True):
+            with st.expander(f"{uploaded_file.name}", expanded=True):
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -624,7 +623,7 @@ elif page == "📤 Upload Regulations":
                 
                 # Validation indicators
                 if regulation_name and geo_jurisdiction:
-                    st.success("✅ Metadata complete")
+                    st.success("Metadata complete")
                 else:
                     st.warning("⚠️ Please fill in both regulation name and geographic jurisdiction")
         
@@ -636,17 +635,17 @@ elif page == "📤 Upload Regulations":
         )
     
     if uploaded_files:
-        st.markdown("### 📋 Upload Status")
+        st.markdown("### Upload Status")
         
         # Display files to be uploaded
         for uploaded_file in uploaded_files:
             col1, col2 = st.columns([4, 1])
             
             with col1:
-                st.write(f"📄 **{uploaded_file.name}** ({uploaded_file.size:,} bytes)")
+                st.write(f"**{uploaded_file.name}** ({uploaded_file.size:,} bytes)")
             
             with col2:
-                st.write("🔄 Ready")
+                st.write("Ready")
         
         # Batch upload controls
         st.markdown("---")
@@ -675,21 +674,21 @@ elif page == "📤 Upload Regulations":
                             
                             if response and response.status_code == 200:
                                 result = response.json()
-                                st.success(f"🎉 {result.get('message', 'Files uploaded successfully!')}")
+                                st.success(f"{result.get('message', 'Files uploaded successfully!')}")
                                 
                                 # Clear metadata after successful upload
                                 st.session_state.pdf_metadata = {}
                                 st.rerun()
                             else:
-                                st.error(f"❌ Upload failed: {str(response)}")
+                                st.error(f"Upload failed: {str(response)}")
                         except Exception as e:
-                            st.error(f"❌ Upload error: {str(e)}")
+                            st.error(f"❌Upload error: {str(e)}")
                 else:
                     st.error("❌ Please complete metadata for all files before uploading")
 
     # Supported regulations info
     st.markdown("---")
-    st.markdown("### 📚 Currently Supported Regulations")
+    st.markdown("### Currently Supported Regulations")
     
     regulations = [
         {"name": "EU Digital Service Act (DSA)", "status": "✅ Active", "coverage": "EU"},
@@ -702,7 +701,7 @@ elif page == "📤 Upload Regulations":
     for reg in regulations:
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
-            st.write(f"📋 **{reg['name']}**")
+            st.write(f"**{reg['name']}**")
         with col2:
             st.write(reg['status'])
         with col3:
@@ -711,10 +710,10 @@ elif page == "📤 Upload Regulations":
 # ================================================
 # Page 3: Analytics Dashboard (unchanged)
 # ================================================
-elif page == "📊 Analytics Dashboard":
+elif page == "Analytics Dashboard":
     st.markdown("""
         <div class="main-header">
-            <h1>📊 Analytics Dashboard</h1>
+            <h1>Analytics Dashboard</h1>
             <p>Monitor compliance analysis trends and system performance</p>
         </div>
     """, unsafe_allow_html=True)
@@ -722,7 +721,7 @@ elif page == "📊 Analytics Dashboard":
     if not st.session_state.analysis_history:
         st.markdown("""
             <div class="feature-card" style="text-align: center;">
-                <h3>📈 No Analysis Data Yet</h3>
+                <h3>No Analysis Data Yet</h3>
                 <p>Start analyzing features to see analytics and trends here.</p>
             </div>
         """, unsafe_allow_html=True)
@@ -746,7 +745,7 @@ elif page == "📊 Analytics Dashboard":
             st.metric("Avg Confidence", f"{avg_confidence:.1%}")
         
         # Analysis history table
-        st.markdown("### 📋 Recent Analysis History")
+        st.markdown("### Recent Analysis History")
         
         if st.session_state.analysis_history:
             df = pd.DataFrame(st.session_state.analysis_history)
@@ -764,7 +763,7 @@ st.markdown("---")
 st.markdown("""
     <div style="text-align: center; color: rgba(255,255,255,0.6); padding: 2rem;">
         <p><strong>TikTok TechJam 2025</strong> | Geo-Regulation Compliance System</p>
-        <p>🚀 Built with Streamlit • Powered by LLM Agents • Ensuring Global Compliance</p>
-        <p style="font-size: 0.8rem;">Mobile-Optimized | iOS & Android Compatible 📱</p>
+        <p>Built with Streamlit • Powered by LLM Agents • Ensuring Global Compliance</p>
+        <p style="font-size: 0.8rem;">Mobile-Optimized | iOS & Android Compatible</p>
     </div>
 """, unsafe_allow_html=True)
