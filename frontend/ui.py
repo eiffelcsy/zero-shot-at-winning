@@ -79,7 +79,7 @@ def check_compliance(feature_title: str, feature_description: str, feature_docum
             f"{API_URL}/check", 
             data=data, 
             files=files if files else None,
-            timeout=30
+            timeout=60
         )
         response.raise_for_status()
         return response.json()
@@ -97,7 +97,7 @@ def submit_feedback(analysis_id: str, feedback_type: str, feedback_text: str = N
             "timestamp": datetime.now().isoformat()
         }
         
-        response = requests.post(f"{API_URL}/feedback", json=payload, timeout=30)
+        response = requests.post(f"{API_URL}/feedback", json=payload, timeout=60)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -134,7 +134,7 @@ def upload_regulation_files_batch(files_with_metadata):
 def get_upload_stats():
     """Get statistics about the PDF upload pipeline."""
     try:
-        response = requests.get(f"{API_BASE_URL}/api/v1/upload-stats", timeout=30)
+        response = requests.get(f"{API_BASE_URL}/api/v1/upload-stats", timeout=60)
         return response.json() if response.status_code == 200 else None
     except Exception as e:
         return None
@@ -276,7 +276,7 @@ if page == "🔍 Compliance Checker":
                     result = check_compliance(title, description, feature_document)
                     
                     if "error" in result:
-                        st.error(f"❌ Error: {result['error']}")
+                        st.error(f"❌ Error: {result}")
                     else:
                         # Generate analysis ID for feedback tracking
                         analysis_id = f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.analysis_history)}"

@@ -292,7 +292,7 @@ Return ONLY valid JSON:
 VALIDATION_PROMPT_TEMPLATE = """
 
 SCREENING ANALYSIS: {screening_analysis}
-RESEARCH FINDINGS: {research_evidence}
+RESEARCH FINDINGS: {research_analysis}
 
 VALIDATION TASK: Cross-verify the compliance assessment for consistency and accuracy.
 
@@ -388,7 +388,7 @@ def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
     template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT_TEMPLATE
     return PromptTemplate(
-        input_variables=["feature_name", "feature_description", "screening_analysis", "research_evidence"],
+        input_variables=["feature_name", "feature_description", "screening_analysis", "research_analysis"],
         template=template
     )
 

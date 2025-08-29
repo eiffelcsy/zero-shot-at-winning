@@ -66,21 +66,21 @@ class ValidationAgent(BaseComplianceAgent):
             feature_name = state.get("feature_name", "")
             feature_description = state.get("feature_description", "")
             screening_analysis = state.get("screening_analysis", {})
-            research_evidence = state.get("research_evidence", [])
+            research_analysis = state.get("research_analysis", [])
             
             # Prepare input for validation
             validation_input = {
                 "feature_name": feature_name,
                 "feature_description": feature_description,
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "research_evidence": json.dumps(research_evidence[:8], indent=2)  # Top 8 for context
+                "research_analysis": json.dumps(research_analysis, indent=2)
             }
             
             # Get LLM decision
             result = await self.chain.ainvoke(validation_input)
             
             # Validate and enhance result
-            enhanced_result = self._validate_result(result, research_evidence)
+            enhanced_result = self._validate_result(result, research_analysis)
             
             self.log_interaction(validation_input, enhanced_result)
             
@@ -113,7 +113,7 @@ class ValidationAgent(BaseComplianceAgent):
                 "validation_error": str(e)
             }
     
-    def _validate_result(self, result: Dict, research_evidence: List[Dict]) -> Dict:
+    def _validate_result(self, result: Dict, research_analysis: List[Dict]) -> Dict:
         """Validate and enhance the LLM result"""
         
         # Ensure decision is valid
@@ -127,7 +127,7 @@ class ValidationAgent(BaseComplianceAgent):
             result["confidence_score"] = 0.5
         
         # Validate related regulations against evidence
-        evidence_urls = {e.get("url") for e in research_evidence if e.get("url")}
+        evidence_urls = {e.get("url") for e in research_analysis if e.get("url")}
         valid_regulations = []
         
         for reg in result.get("related_regulations", []):
@@ -145,7 +145,7 @@ class ValidationAgent(BaseComplianceAgent):
         # Add validation metadata
         result["validation_metadata"] = {
             "agent": self.name,
-            "evidence_pieces_reviewed": len(research_evidence),
+            "evidence_pieces_reviewed": len(research_analysis),
             "regulations_cited": len(result["related_regulations"]),
             "timestamp": datetime.now().isoformat()
         }
@@ -162,7 +162,7 @@ class ValidationAgent(BaseComplianceAgent):
             "feature_name": payload.get("feature_name", ""),
             "feature_description": payload.get("feature_description", ""),
             "screening_analysis": payload.get("screening", {}),
-            "research_evidence": payload.get("research", {}).get("evidence", [])
+            "research_analysis": payload.get("research", {}).get("evidence", [])
         }
         
         # Run async process

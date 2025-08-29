@@ -118,7 +118,6 @@ class RetrievalTool(BaseTool):
             raw_results = []
             for enhanced_query in enhanced_queries:
                 res = await self._retrieve_documents(enhanced_query, **kwargs)
-                logger.info(res)
                 raw_results.extend(res)
             
             # Return raw results and enhanced queries for downstream synthesis
