@@ -69,8 +69,6 @@ class ResearchAgent(BaseComplianceAgent):
         
         # Extract just the string content from the result
         search_query = result.content.strip()
-        
-        self.logger.info(f"Generated search query: {search_query}")
         return search_query
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,7 +91,7 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 2: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
             retrieved_documents = await self.retrieval_tool.ainvoke({
                 "query": base_query,
-                "n_results": 5
+                "n_results_per_query": 5
             })
             
             # Get the enhanced query for logging purposes
@@ -107,7 +105,7 @@ class ResearchAgent(BaseComplianceAgent):
                 "feature_name": feature_name,
                 "feature_description": feature_description,
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "evidence_found": json.dumps(regulations[:5], indent=2),
+                "evidence_found": json.dumps(regulations, indent=2),
             }
 
             result = await self.safe_llm_call(llm_input)
@@ -120,17 +118,18 @@ class ResearchAgent(BaseComplianceAgent):
             result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
             result["confidence_score"] = confidence_score
-            result["retrieved_documents"] = retrieved_documents["raw_results"]
 
             self.log_interaction(state, result)
 
             # Return enhanced state update with consistent field names
             return {
-                "research_regulations": result["regulations"],
-                "research_queries": result["queries_used"],
-                "research_confidence": result["confidence_score"],
-                "research_retrieved_documents": result["retrieved_documents"],
-                "research_analysis": result,
+                "research_analysis": {
+                    "agent": "ResearchAgent",
+                    "regulations": result["regulations"],
+                    "queries_used": result["queries_used"],
+                    "confidence_score": result["confidence_score"],
+                    "retrieved_documents": retrieved_documents["raw_results"]
+                },
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
@@ -140,21 +139,17 @@ class ResearchAgent(BaseComplianceAgent):
             self.logger.error(f"Research agent failed: {e}")
             # Simplified error handling - return error in state
             return {
-                "research_regulations": [],
-                "research_queries": [],
-                "research_confidence": 0.0,
-                "research_retrieved_documents": [],
                 "research_analysis": {
                     "agent": "ResearchAgent",
                     "regulations": [],
-                    "query_used": "",
+                    "queries_used": [],
                     "confidence_score": 0.0,
+                    "retrieved_documents": [],
                     "error": str(e)
                 },
-                "research_error": str(e),
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": "END"
+                "next_step": "validation"
             }
 
     def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]], llm_result: Dict) -> float:

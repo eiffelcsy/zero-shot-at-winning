@@ -65,10 +65,8 @@ def create_initial_state(
         research_timestamp=None,
         
         validation_analysis=None,
-        final_decision=None,
         validation_completed=None,
         validation_timestamp=None,
-        validation_error=None,
         
         next_step="screening",  # Start with screening
         workflow_started=datetime.now().isoformat(),
@@ -122,7 +120,7 @@ def get_workflow_summary(state: ComplianceState) -> Dict[str, Any]:
     # Updated to use new field names
     if state.get("research_analysis"):
         summary["regulations_found"] = len(state["research_analysis"].get("regulations", []))
-        summary["evidence_pieces"] = len(state["research_analysis"].get("evidence", []))
+        summary["evidence_pieces"] = len(state["research_analysis"].get("regulations", []))
     
     summary["overall_confidence"] = state.get("confidence_score")
     summary["errors"] = state.get("workflow_errors", [])

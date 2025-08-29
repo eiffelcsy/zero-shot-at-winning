@@ -289,7 +289,8 @@ if page == "Compliance Checker":
                             "description": description[:100] + "..." if len(description) > 100 else description,
                             "has_document": feature_document is not None,
                             "document_name": feature_document.name if feature_document else None,
-                            "flag": result.get("flag", "unknown"),
+                            "flag": result.get("needs_geo_logic", "unknown"),
+                            "workflow_status": "completed" if result.get("workflow_completed") else "partial",
                             "confidence": result.get("confidence_score", 0.0),
                             "risk_level": result.get("risk_level", "Unknown"),
                             "full_result": result
@@ -300,37 +301,152 @@ if page == "Compliance Checker":
                         st.markdown("---")
                         st.markdown("## Analysis Results")
                         
-                        # Agent processing status
-                        st.markdown("### Multi-Agent System Status")
+                        # Multi-Agent System Status
+                        st.markdown("### 🤖 Multi-Agent System Status")
+                        
+                        # Get agent statuses from result
+                        agent_statuses = result.get("agent_statuses", {})
+                        agents_completed = result.get("agents_completed", [])
+                        
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            st.markdown('<span class="agent-status agent-complete">Screening Agent: Complete</span>', unsafe_allow_html=True)
+                            screening_status = "✅ Complete" if "screening" in agents_completed else "⏳ Pending"
+                            screening_color = "agent-complete" if "screening" in agents_completed else "agent-pending"
+                            st.markdown(f'<span class="agent-status {screening_color}">🔍 Screening Agent: {screening_status}</span>', unsafe_allow_html=True)
+                        
                         with col2:
-                            st.markdown('<span class="agent-status agent-complete">Research Agent: Complete</span>', unsafe_allow_html=True)
+                            research_status = "✅ Complete" if "research" in agents_completed else "⏳ Pending"
+                            research_color = "agent-complete" if "research" in agents_completed else "agent-pending"
+                            st.markdown(f'<span class="agent-status {research_color}">📚 Research Agent: {research_status}</span>', unsafe_allow_html=True)
+                        
                         with col3:
-                            st.markdown('<span class="agent-status agent-complete">Validation Agent: Complete</span>', unsafe_allow_html=True)
+                            validation_status = "✅ Complete" if "validation" in agents_completed else "⏳ Pending"
+                            validation_color = "agent-complete" if "validation" in agents_completed else "agent-pending"
+                            st.markdown(f'<span class="agent-status {validation_color}">⚖️ Validation Agent: {validation_status}</span>', unsafe_allow_html=True)
                         
                         st.markdown("---")
                         
                         # Main result
-                        flag = result.get("flag", "Unknown")
-                        if flag.lower() == "yes":
+                        needs_geo_logic = result.get("needs_geo_logic", "UNKNOWN")
+                        if needs_geo_logic == "YES":
                             st.markdown("""
                                 <div class="success-badge">
-                                    Feature REQUIRES geo-specific compliance logic
+                                    🚩 Feature REQUIRES geo-specific compliance logic
+                                </div>
+                            """, unsafe_allow_html=True)
+                        elif needs_geo_logic == "NO":
+                            st.markdown("""
+                                <div class="info-badge">
+                                    ✅ Feature does NOT require geo-specific compliance logic
                                 </div>
                             """, unsafe_allow_html=True)
                         else:
                             st.markdown("""
-                                <div class="info-badge">
-                                    Feature does NOT require geo-specific compliance logic
+                                <div class="warning-badge">
+                                    ❓ Analysis result unclear - needs review
                                 </div>
                             """, unsafe_allow_html=True)
                         
                         # Document processing status
                         if feature_document:
                             st.markdown(f"**Document Processed:** {feature_document.name} included in analysis")
+                        
+                        # Multi-Agent Detailed Results
+                        st.markdown("---")
+                        st.markdown("### 🔍 Agent Analysis Details")
+                        
+                        # Create tabs for each agent's results
+                        agent_tabs = st.tabs(["📋 Screening Results", "🔬 Research Results", "⚖️ Validation Results"])
+                        
+                        with agent_tabs[0]:  # Screening Results
+                            screening_analysis = result.get("screening_analysis")
+                            if screening_analysis:
+                                st.markdown("#### Screening Agent Analysis")
+                                st.info(f"**Risk Assessment:** {screening_analysis.get('risk_level', 'Unknown')}")
+                                st.markdown(f"**Initial Decision:** {screening_analysis.get('compliance_required', 'Unknown')}")
+                                st.markdown(f"**Confidence:** {screening_analysis.get('confidence', 0.0):.1%}")
+                                if screening_analysis.get('reasoning'):
+                                    st.markdown("**Reasoning:**")
+                                    st.markdown(screening_analysis['reasoning'])
+                                
+                                # Show geographic indicators if available
+                                geo_indicators = screening_analysis.get('geographic_indicators', [])
+                                if geo_indicators:
+                                    st.markdown("**Geographic Indicators Found:**")
+                                    for indicator in geo_indicators:
+                                        st.markdown(f"• {indicator}")
+                            else:
+                                st.warning("Screening analysis not available")
+                        
+                        with agent_tabs[1]:  # Research Results
+                            research_analysis = result.get("research_analysis")
+                            if research_analysis:
+                                st.markdown("#### Research Agent Findings")
+                                
+                                # Research statistics
+                                regulations = research_analysis.get('regulations', [])
+                                queries_used = research_analysis.get('queries_used', [])
+                                research_confidence = research_analysis.get('confidence_score', 0.0)
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Regulations Found", len(regulations))
+                                with col2:
+                                    st.metric("Search Queries", len(queries_used))
+                                with col3:
+                                    st.metric("Research Confidence", f"{research_confidence:.1%}")
+                                
+                                # Show search queries used
+                                if queries_used:
+                                    st.markdown("**Search Queries Used:**")
+                                    for i, query in enumerate(queries_used, 1):
+                                        st.markdown(f"{i}. _{query}_")
+                                
+                                # Show top regulations found
+                                if regulations:
+                                    st.markdown("**Top Regulations Found:**")
+                                    for i, reg in enumerate(regulations[:5], 1):  # Show top 5
+                                        with st.expander(f"{i}. {reg.get('regulation_name', 'Unknown')} (Confidence: {reg.get('confidence_score', 0):.1f}%)", expanded=False):
+                                            st.markdown(f"**Source:** {reg.get('source_filename', 'Unknown')}")
+                                            if reg.get('excerpt'):
+                                                st.markdown("**Excerpt:**")
+                                                st.markdown(f"_{reg['excerpt']}_")
+                            else:
+                                st.warning("Research analysis not available")
+                        
+                        with agent_tabs[2]:  # Validation Results
+                            validation_analysis = result.get("validation_analysis")
+                            final_decision = result.get("final_decision")
+                            
+                            if validation_analysis or final_decision:
+                                st.markdown("#### Validation Agent Decision")
+                                
+                                decision_data = validation_analysis or final_decision
+                                final_needs_geo = decision_data.get('needs_geo_logic', 'UNKNOWN')
+                                final_confidence = decision_data.get('confidence', 0.0)
+                                final_reasoning = decision_data.get('reasoning', '')
+                                
+                                # Decision summary
+                                if final_needs_geo == "YES":
+                                    st.success(f"✅ **FINAL DECISION:** Requires geo-compliance (Confidence: {final_confidence:.1%})")
+                                elif final_needs_geo == "NO":
+                                    st.info(f"ℹ️ **FINAL DECISION:** No geo-compliance required (Confidence: {final_confidence:.1%})")
+                                else:
+                                    st.warning(f"⚠️ **FINAL DECISION:** Needs review (Confidence: {final_confidence:.1%})")
+                                
+                                if final_reasoning:
+                                    st.markdown("**Final Reasoning:**")
+                                    st.markdown(final_reasoning)
+                                
+                                # Validation metadata
+                                if validation_analysis and validation_analysis.get('validation_metadata'):
+                                    metadata = validation_analysis['validation_metadata']
+                                    st.markdown("**Validation Details:**")
+                                    st.markdown(f"• Evidence pieces reviewed: {metadata.get('evidence_pieces_reviewed', 0)}")
+                                    st.markdown(f"• Regulations cited: {metadata.get('regulations_cited', 0)}")
+                            else:
+                                st.warning("Validation analysis not completed")
                         
                         # Detailed results in columns
                         col1, col2 = st.columns(2)
@@ -353,12 +469,35 @@ if page == "Compliance Checker":
                             st.markdown("#### Analysis Reasoning")
                             st.info(result.get("reasoning", "No reasoning provided"))
                         
-                        # Related Regulations
+                        # Related Regulations - Enhanced display
                         related_regs = result.get("related_regulations", [])
                         if related_regs:
-                            st.markdown("#### Related Regulations")
+                            st.markdown("#### 📋 Related Regulations")
+                            
+                            # Display regulations with better formatting
                             for i, reg in enumerate(related_regs, 1):
-                                st.markdown(f"**{i}.** {reg}")
+                                if isinstance(reg, dict):
+                                    # Structured regulation object
+                                    reg_name = reg.get("name", reg.get("regulation_name", "Unknown Regulation"))
+                                    jurisdiction = reg.get("jurisdiction", "Unknown Jurisdiction")
+                                    section = reg.get("section", "")
+                                    url = reg.get("url", "")
+                                    excerpt = reg.get("evidence_excerpt", reg.get("excerpt", ""))
+                                    
+                                    with st.expander(f"**{i}. {reg_name}** ({jurisdiction})", expanded=False):
+                                        if section:
+                                            st.markdown(f"**Section:** {section}")
+                                        if url:
+                                            st.markdown(f"**URL:** {url}")
+                                        if excerpt:
+                                            st.markdown(f"**Evidence:**")
+                                            st.markdown(f"_{excerpt}_")
+                                else:
+                                    # Simple string regulation
+                                    st.markdown(f"**{i}.** {reg}")
+                        else:
+                            st.markdown("#### 📋 Related Regulations")
+                            st.info("No specific regulations identified in this analysis.")
                         
                         # Enhanced Feedback Section
                         st.markdown("---")
@@ -513,9 +652,10 @@ if page == "Compliance Checker":
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            # CSV export
-                            csv_data = f"Analysis ID,Title,Description,Has Document,Flag,Confidence,Risk Level,Reasoning\n"
-                            csv_data += f'"{analysis_id}","{title}","{description}","{feature_document is not None}","{flag}",{confidence},"{risk_level}","{result.get("reasoning", "")}"'
+                            # CSV export with enhanced data
+                            csv_data = f"Analysis ID,Title,Description,Has Document,Needs Geo Logic,Confidence,Risk Level,Agents Completed,Evidence Sources,Reasoning\n"
+                            agents_completed_str = ";".join(result.get("agents_completed", []))
+                            csv_data += f'"{analysis_id}","{title}","{description}","{feature_document is not None}","{needs_geo_logic}",{confidence},"{risk_level}","{agents_completed_str}",{result.get("evidence_sources", 0)},"{result.get("reasoning", "")}"'
                             
                             st.download_button(
                                 label="Download CSV Report",

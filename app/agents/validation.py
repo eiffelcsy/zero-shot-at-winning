@@ -49,9 +49,6 @@ class ValidationAgent(BaseComplianceAgent):
     def _setup_chain(self):
         """Setup LangChain prompt and parser"""
         validation_prompt = build_validation_prompt(self.memory_overlay)
-        self.prompt_template = validation_prompt
-        self.output_parser = JsonOutputParser(pydantic_object=ValidationOutput)
-        self.chain = self.prompt_template | self.llm | self.output_parser
         self.create_chain(validation_prompt, ValidationOutput)
 
     def update_memory(self, new_memory_overlay: str):
@@ -66,8 +63,17 @@ class ValidationAgent(BaseComplianceAgent):
             feature_name = state.get("feature_name", "")
             feature_description = state.get("feature_description", "")
             screening_analysis = state.get("screening_analysis", {})
-            research_analysis = state.get("research_analysis", [])
+            research_analysis = state.get("research_analysis", {})
             
+            if not feature_name or not feature_description:
+                raise ValueError("Missing feature name or description")
+            
+            if not screening_analysis:
+                raise ValueError("Missing screening analysis from previous agent")
+            
+            if not research_analysis or not research_analysis.get("regulations"):
+                raise ValueError("Missing research analysis from previous agent")
+
             # Prepare input for validation
             validation_input = {
                 "feature_name": feature_name,
@@ -77,22 +83,24 @@ class ValidationAgent(BaseComplianceAgent):
             }
             
             # Get LLM decision
-            result = await self.chain.ainvoke(validation_input)
+            result = await self.safe_llm_call(validation_input)
             
-            # Validate and enhance result
-            enhanced_result = self._validate_result(result, research_analysis)
+            self.log_interaction(validation_input, result)
             
-            self.log_interaction(validation_input, enhanced_result)
-            
-            # Return final decision for LangGraph
+            # Return final decision for LangGraph in enhanced format
             return {
-                "final_decision": {
-                    "needs_geo_logic": enhanced_result["needs_geo_logic"],
-                    "reasoning": enhanced_result["reasoning"],
-                    "related_regulations": enhanced_result["related_regulations"],
-                    "confidence": enhanced_result["confidence_score"],
-                    "agent": self.name,
-                    "validation_method": "evidence_based_llm_decision"
+                "validation_analysis": {
+                    "needs_geo_logic": result.get("needs_geo_logic", "REVIEW"),
+                    "reasoning": result.get("reasoning", ""),
+                    "related_regulations": result.get("related_regulations", []),
+                    "confidence": result.get("confidence_score", 0.5),
+                    "agent": "ValidationAgent",
+                    "validation_metadata": {
+                        "agent": "ValidationAgent",
+                        "evidence_pieces_reviewed": len(research_analysis.get("regulations", [])),
+                        "regulations_cited": len(result.get("related_regulations", [])),
+                        "timestamp": datetime.now().isoformat()
+                    }
                 },
                 "validation_completed": True,
                 "validation_timestamp": datetime.now().isoformat(),
@@ -102,78 +110,17 @@ class ValidationAgent(BaseComplianceAgent):
         except Exception as e:
             self.logger.error(f"Validation agent failed: {e}")
             return {
-                "final_decision": {
+                "validation_analysis": {
                     "needs_geo_logic": "REVIEW",
                     "reasoning": f"Validation failed due to processing error: {str(e)}. Human review required.",
                     "related_regulations": [],
                     "confidence": 0.0,
+                    "agent": "ValidationAgent",
                     "error": str(e)
                 },
                 "validation_completed": True,
-                "validation_error": str(e)
+                "validation_timestamp": datetime.now().isoformat(),
+                "validation_error": str(e),
+                "workflow_completed": True
             }
-    
-    def _validate_result(self, result: Dict, research_analysis: List[Dict]) -> Dict:
-        """Validate and enhance the LLM result"""
-        
-        # Ensure decision is valid
-        if result.get("needs_geo_logic") not in ["YES", "NO", "REVIEW"]:
-            result["needs_geo_logic"] = "REVIEW"
-            result["reasoning"] = "Invalid decision format detected. " + result.get("reasoning", "")
-        
-        # Validate confidence score
-        confidence = result.get("confidence_score", 0.5)
-        if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
-            result["confidence_score"] = 0.5
-        
-        # Validate related regulations against evidence
-        evidence_urls = {e.get("url") for e in research_analysis if e.get("url")}
-        valid_regulations = []
-        
-        for reg in result.get("related_regulations", []):
-            # Check if regulation URL exists in evidence
-            if isinstance(reg, dict) and reg.get("url") in evidence_urls:
-                valid_regulations.append(reg)
-        
-        result["related_regulations"] = valid_regulations
-        
-        # Downgrade decision if no supporting regulations for YES
-        if result["needs_geo_logic"] == "YES" and not result["related_regulations"]:
-            result["needs_geo_logic"] = "REVIEW"
-            result["reasoning"] += " | Decision downgraded to REVIEW: no supporting regulations found in evidence."
-        
-        # Add validation metadata
-        result["validation_metadata"] = {
-            "agent": self.name,
-            "evidence_pieces_reviewed": len(research_analysis),
-            "regulations_cited": len(result["related_regulations"]),
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        return result
-    
-    # Synchronous method for backward compatibility (if needed)
-    def decide(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Synchronous decision method for compatibility"""
-        import asyncio
-        
-        # Convert payload to state format
-        state = {
-            "feature_name": payload.get("feature_name", ""),
-            "feature_description": payload.get("feature_description", ""),
-            "screening_analysis": payload.get("screening", {}),
-            "research_analysis": payload.get("research", {}).get("evidence", [])
-        }
-        
-        # Run async process
-        result = asyncio.run(self.process(state))
-        
-        # Return in expected format
-        final_decision = result.get("final_decision", {})
-        return {
-            "agent": self.name,
-            "decision": final_decision.get("needs_geo_logic", "REVIEW"),
-            "reasoning": final_decision.get("reasoning", ""),
-            "related_regulations": final_decision.get("related_regulations", []),
-            "raw": final_decision
-        }
+

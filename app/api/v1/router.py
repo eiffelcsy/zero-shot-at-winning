@@ -38,7 +38,7 @@ class ComplianceResponse(BaseModel):
     feature_name: str = Field(description="Name of the analyzed feature")
     needs_geo_logic: str = Field(description="Whether feature needs geo-specific logic (YES/NO/UNKNOWN)")
     reasoning: str = Field(description="Detailed reasoning for the decision")
-    related_regulations: List[str] = Field(default=[], description="List of related regulations")
+    related_regulations: List[Dict[str, Any]] = Field(default=[], description="List of related regulation objects")
     confidence_score: float = Field(description="Confidence score between 0.0 and 1.0")
     risk_level: str = Field(description="Risk level (LOW/MEDIUM/HIGH/UNKNOWN)")
     workflow_completed: Optional[bool] = Field(description="Whether the full workflow completed")
@@ -46,6 +46,16 @@ class ComplianceResponse(BaseModel):
     evidence_sources: int = Field(default=0, description="Number of evidence sources found")
     research_confidence: float = Field(default=0.0, description="Research agent confidence score")
     applicable_jurisdictions: List[str] = Field(default=[], description="Applicable legal jurisdictions")
+    
+    # Multi-agent specific fields
+    screening_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Screening agent results")
+    research_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Research agent results")
+    validation_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Validation agent results")
+    final_decision: Optional[Dict[str, Any]] = Field(default=None, description="Final validation decision")
+    
+    # Agent statuses
+    agent_statuses: Dict[str, str] = Field(default={}, description="Status of each agent (completed, failed, etc.)")
+    
     error: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
 # Initialize the PDF ingestion pipeline
@@ -526,19 +536,60 @@ async def run_compliance_analysis(
         )
         
         # Map orchestrator result to API response format
+        # Extract agent-specific results for detailed UI display with safe access
+        screening_analysis = orchestrator_result.get("screening_analysis")
+        research_analysis = orchestrator_result.get("research_analysis")
+        validation_analysis = orchestrator_result.get("validation_analysis")
+        final_decision = orchestrator_result.get("final_decision")
+        
+        # Safely extract agents completed list
+        agents_completed = orchestrator_result.get("agents_completed", [])
+        if not isinstance(agents_completed, list):
+            agents_completed = []
+        
+        # Determine agent statuses with error handling
+        agent_statuses = {
+            "screening": "completed" if "screening" in agents_completed else "pending",
+            "research": "completed" if "research" in agents_completed else "pending",
+            "validation": "completed" if "validation" in agents_completed else "pending"
+        }
+        
+        # Handle workflow completion status
+        workflow_completed = orchestrator_result.get("workflow_completed", False)
+        if workflow_completed is None:
+            workflow_completed = False
+        
+        # Safely extract related regulations
+        related_regulations = orchestrator_result.get("related_regulations", [])
+        if not isinstance(related_regulations, list):
+            related_regulations = []
+        
+        # Safely extract applicable jurisdictions
+        applicable_jurisdictions = orchestrator_result.get("applicable_jurisdictions", [])
+        if not isinstance(applicable_jurisdictions, list):
+            applicable_jurisdictions = []
+        
         return ComplianceResponse(
             session_id=orchestrator_result.get("session_id"),
             feature_name=orchestrator_result.get("feature_name", title),
             needs_geo_logic=orchestrator_result.get("needs_geo_logic", "UNKNOWN"),
             reasoning=orchestrator_result.get("reasoning", ""),
-            related_regulations=orchestrator_result.get("related_regulations", []),
-            confidence_score=orchestrator_result.get("confidence_score", 0.0),
+            related_regulations=related_regulations,
+            confidence_score=float(orchestrator_result.get("confidence_score", 0.0)),
             risk_level=orchestrator_result.get("risk_level", "UNKNOWN"),
-            workflow_completed=orchestrator_result.get("workflow_completed", False),
-            agents_completed=orchestrator_result.get("agents_completed", []),
-            evidence_sources=orchestrator_result.get("evidence_sources", 0),
-            research_confidence=orchestrator_result.get("research_confidence", 0.0),
-            applicable_jurisdictions=orchestrator_result.get("applicable_jurisdictions", []),
+            workflow_completed=workflow_completed,
+            agents_completed=agents_completed,
+            evidence_sources=int(orchestrator_result.get("evidence_sources", 0)),
+            research_confidence=float(orchestrator_result.get("research_confidence", 0.0)),
+            applicable_jurisdictions=applicable_jurisdictions,
+            
+            # Multi-agent specific results
+            screening_analysis=screening_analysis,
+            research_analysis=research_analysis,
+            validation_analysis=validation_analysis,
+            final_decision=final_decision,
+            agent_statuses=agent_statuses,
+            
             error=orchestrator_result.get("error")
         )
         
@@ -557,6 +608,14 @@ async def run_compliance_analysis(
             evidence_sources=0,
             research_confidence=0.0,
             applicable_jurisdictions=[],
+            
+            # Multi-agent specific error state
+            screening_analysis=None,
+            research_analysis=None,
+            validation_analysis=None,
+            final_decision=None,
+            agent_statuses={"screening": "failed", "research": "failed", "validation": "failed"},
+            
             error=str(e)
         )
 

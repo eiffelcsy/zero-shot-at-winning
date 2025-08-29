@@ -100,28 +100,59 @@ class ComplianceOrchestrator:
             
             # Extract and format final result
             final_decision = final_state.get("final_decision", {})
+            validation_analysis = final_state.get("validation_analysis", {})
             screening_analysis = final_state.get("screening_analysis", {})
             research_analysis = final_state.get("research_analysis", {})
+            
+            # Determine which agents completed
+            agents_completed = []
+            if final_state.get("screening_completed", False):
+                agents_completed.append("screening")
+            if final_state.get("research_completed", False):
+                agents_completed.append("research")
+            if final_state.get("validation_completed", False):
+                agents_completed.append("validation")
+            
+            # Extract final decision - prefer validation over screening
+            if validation_analysis:
+                needs_geo_logic = validation_analysis.get("needs_geo_logic", "UNKNOWN")
+                reasoning = validation_analysis.get("reasoning", "")
+                confidence = validation_analysis.get("confidence", 0.0)
+                related_regulations = validation_analysis.get("related_regulations", [])
+            else:
+                needs_geo_logic = screening_analysis.get("compliance_required", "UNKNOWN")
+                reasoning = screening_analysis.get("reasoning", "")
+                confidence = screening_analysis.get("confidence", 0.0)
+                related_regulations = []
+            
+            # Extract jurisdictions from research results
+            applicable_jurisdictions = []
+            if research_analysis and "regulations" in research_analysis:
+                for reg in research_analysis["regulations"]:
+                    if isinstance(reg, dict) and "jurisdiction" in reg:
+                        jurisdiction = reg["jurisdiction"]
+                        if jurisdiction and jurisdiction not in applicable_jurisdictions:
+                            applicable_jurisdictions.append(jurisdiction)
             
             return {
                 "session_id": final_state.get("session_id"),
                 "feature_name": feature_name,
-                "needs_geo_logic": final_decision.get("needs_geo_logic", "UNKNOWN"),
-                "reasoning": final_decision.get("reasoning", screening_analysis.get("reasoning", "")),
-                "related_regulations": final_decision.get("related_regulations", []),
-                "confidence_score": final_decision.get("confidence", screening_analysis.get("confidence", 0.0)),
+                "needs_geo_logic": needs_geo_logic,
+                "reasoning": reasoning,
+                "related_regulations": related_regulations,
+                "confidence_score": confidence,
                 "risk_level": screening_analysis.get("risk_level", "UNKNOWN"),
-                "workflow_completed": final_state.get("workflow_completed"),
-                "agents_completed": [
-                    agent for agent in ["screening", "research", "validation", "learning"] # TODO: remove validation and learning
-                    if final_state.get(f"{agent}_completed", False)
-                ],
-                "evidence_sources": len(final_state.get("research_evidence", [])),
-                "research_confidence": final_state.get("research_confidence", 0.0),
-                "applicable_jurisdictions": [
-                    jur.get("jurisdiction", "") for jur in 
-                    final_state.get("research_jurisdictions", [])
-                ]
+                "workflow_completed": final_state.get("workflow_completed", False),
+                "agents_completed": agents_completed,
+                "evidence_sources": len(research_analysis.get("regulations", [])) if research_analysis else 0,
+                "research_confidence": research_analysis.get("confidence_score", 0.0) if research_analysis else 0.0,
+                "applicable_jurisdictions": applicable_jurisdictions,
+                
+                # Pass through agent-specific analyses for UI display
+                "screening_analysis": screening_analysis,
+                "research_analysis": research_analysis,
+                "validation_analysis": validation_analysis,
+                "final_decision": final_decision or validation_analysis
             }
             
         except Exception as e:
@@ -129,12 +160,23 @@ class ComplianceOrchestrator:
             return {
                 "session_id": initial_state.get("session_id"),
                 "feature_name": feature_name,
-                "error": f"Workflow failed: {str(e)}, \n Final state: {final_state}",
+                "error": f"Workflow failed: {str(e)}",
                 "workflow_completed": False,
                 "agents_completed": [],
                 "risk_level": "ERROR",
                 "confidence_score": 0.0,
-                "evidence_sources": 0
+                "evidence_sources": 0,
+                "needs_geo_logic": "UNKNOWN",
+                "reasoning": f"Analysis failed due to workflow error: {str(e)}",
+                "related_regulations": [],
+                "research_confidence": 0.0,
+                "applicable_jurisdictions": [],
+                
+                # Empty agent analyses for error state
+                "screening_analysis": None,
+                "research_analysis": None,
+                "validation_analysis": None,
+                "final_decision": None
             }
     
     def get_workflow_status(self) -> Dict[str, Any]:

@@ -86,7 +86,7 @@ class RetrievalTool(BaseTool):
     async def _arun(
         self,
         query: str,
-        n_results: int = 5,
+        n_results_per_query: int = 5,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> Dict[str, Any]:
         """
@@ -113,7 +113,7 @@ class RetrievalTool(BaseTool):
             enhanced_queries = await self.query_processor.expand_query(query)
             
             # Step 2: Retrieve documents
-            kwargs = {"n_results": n_results}
+            kwargs = {"n_results_per_query": n_results_per_query}
                 
             raw_results = []
             for enhanced_query in enhanced_queries:
@@ -146,7 +146,7 @@ class RetrievalTool(BaseTool):
             List of raw retrieval results
         """
         try:
-            n_results = kwargs.get('n_results', 5)
+            n_results_per_query = kwargs.get('n_results_per_query', 5)
             
             # Generate embedding for the enhanced query
             query_embedding = await self._generate_query_embedding(enhanced_query)
@@ -154,7 +154,7 @@ class RetrievalTool(BaseTool):
             # Retrieve documents using the embedding
             return self.retriever.retrieve(
                 query_embedding=query_embedding,
-                n_results=n_results
+                n_results=n_results_per_query
             )
             
         except Exception as e:
