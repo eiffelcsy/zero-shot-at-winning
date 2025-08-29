@@ -14,6 +14,8 @@ langchain-community
 langchain-openai
 langchain-chroma
 langgraph
+langgraph-checkpoint-postgres
+psycopg[binary]
 
 # LLM Providers
 openai
