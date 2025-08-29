@@ -82,9 +82,6 @@ class ResearchAgent(BaseComplianceAgent):
             if not screening_analysis:
                 raise ValueError("Missing screening analysis from previous agent")
 
-            # Extract key parameters from screening
-            geographic_scope = screening_analysis.get("geographic_scope", [])
-
             # Step 1: Generate search query using LLM
             base_query = await self._generate_search_query_llm(screening_analysis)
 

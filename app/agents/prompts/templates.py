@@ -288,17 +288,6 @@ Return ONLY valid JSON:
 }}
 """
 
-# # Create PromptTemplate objects
-# SCREENING_PROMPT = PromptTemplate(
-#     input_variables=["feature_name"", feature_description", "context_documents"],
-#     template=SCREENING_PROMPT_TEMPLATE
-# )
-
-# RESEARCH_PROMPT = PromptTemplate(
-#     input_variables=["screening_analysis", "evidence_found"],
-#     template=RESEARCH_PROMPT_TEMPLATE
-# )
-
 # Validation prompt template (for future use)
 VALIDATION_PROMPT_TEMPLATE = """
 
@@ -309,18 +298,18 @@ VALIDATION TASK: Cross-verify the compliance assessment for consistency and accu
 
 Return ONLY valid JSON:
 {{
-  "needs_geo_logic": "YES",
-  "reasoning": "Provide a detailed explanation (10–1200 characters) of why the compliance decision was made, referencing research findings and screening analysis.",
-  "related_regulations": [
-    {
-      "name": "General Data Protection Regulation (GDPR)",
-      "jurisdiction": "EU",
-      "section": "Article 44 - Transfers of personal data to third countries",
-      "url": "https://gdpr-info.eu/art-44-gdpr/",
-      "evidence_excerpt": "Transfers of personal data to a third country may only take place if the conditions laid down in this Regulation are complied with."
-    }
-  ],
-  "confidence_score": 0.85
+    "needs_geo_logic": "YES",
+    "reasoning": "Provide a detailed explanation (10–1200 characters) of why the compliance decision was made, referencing research findings and screening analysis.",
+    "related_regulations": [
+        {
+        "name": "General Data Protection Regulation (GDPR)",
+        "jurisdiction": "EU",
+        "section": "Article 44 - Transfers of personal data to third countries",
+        "url": "https://gdpr-info.eu/art-44-gdpr/",
+        "evidence_excerpt": "Transfers of personal data to a third country may only take place if the conditions laid down in this Regulation are complied with."
+        }
+    ],
+    "confidence_score": 0.85
 }}
 """
 
@@ -365,15 +354,10 @@ USER_FEEDBACK (is_correct=yes|no, notes): {feedback}
 Goal: Propose precise updates so future runs reach the correct decision.
 - If is_correct=='yes': optionally add one reinforcing few-shot.
 - If is_correct=='no': propose targeted updates: glossary terms, short rules,
-  few-shots, and KB snippets (with URLs and excerpts) that support the corrected outcome.
+    few-shots, and KB snippets (with URLs and excerpts) that support the corrected outcome.
 - Keep updates minimal, safe, and non-duplicative. If nothing actionable, output empty lists.
 Return ONLY valid JSON with keys: agent, summary, glossary, rules, few_shots, kb_snippets.
 """
-
-# VALIDATION_PROMPT = PromptTemplate(
-#     input_variables=["screening_result", "research_result"],
-#     template=VALIDATION_PROMPT_TEMPLATE
-# )
 
 # Common output format schema for reference
 COMPLIANCE_OUTPUT_SCHEMA = {
@@ -405,7 +389,7 @@ def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
     template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT_TEMPLATE
     return PromptTemplate(
-        input_variables=["screening_result", "research_result"],
+        input_variables=["feature_name", "feature_description", "screening_analysis", "research_evidence"],
         template=template
     )
 
