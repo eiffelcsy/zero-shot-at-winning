@@ -4,7 +4,9 @@ from app.agents.prompts.templates import (
     SCREENING_PROMPT, 
     TIKTOK_CONTEXT,
     BASE_COMPLIANCE_PROMPT,
-    COMPLIANCE_OUTPUT_SCHEMA
+    COMPLIANCE_OUTPUT_SCHEMA,
+    RESEARCH_PROMPT,
+    RESEARCH_OUTPUT_SCHEMA
 )
 
 class TestPromptTemplates:
@@ -133,3 +135,97 @@ class TestPromptTemplates:
                             if keyword.lower() in formatted_prompt.lower())
         
         assert found_keywords >= 3, "Should emphasize pattern recognition approach"
+
+    def test_research_prompt_formatting(self):
+        """Test that research prompt formats correctly with sample data"""
+        screening_analysis = "Supplier X flagged for AML risks in APAC"
+        evidence_found = "No documents retrieved in this test."
+        
+        formatted_prompt = RESEARCH_PROMPT.format(
+            screening_analysis=screening_analysis,
+            evidence_found=evidence_found
+        )
+        
+        assert isinstance(formatted_prompt, str)
+        assert len(formatted_prompt) > 100  # Should be substantial
+        assert screening_analysis in formatted_prompt
+        assert evidence_found in formatted_prompt
+        assert "JSON" in formatted_prompt
+    
+    @pytest.mark.parametrize("screening_analysis", [
+        "Supplier Y under investigation for child labor in Africa",
+        "Supplier Z flagged for T5 data processing in EU",
+        "Entity involved in multiple geographic jurisdictions",
+        "High-risk supplier with unclear compliance requirements"
+    ])
+    def test_prompt_variable_substitution(self, screening_analysis):
+        """Test research prompt formatting with various inputs"""
+        formatted_prompt = RESEARCH_PROMPT.format(
+            screening_analysis=screening_analysis,
+            evidence_found="placeholder evidence"
+        )
+        
+        assert screening_analysis in formatted_prompt
+        assert len(formatted_prompt) > len(screening_analysis)
+    
+    def test_output_schema_present(self):
+        """Test that the research prompt specifies the required output schema"""
+        formatted_prompt = RESEARCH_PROMPT.format(
+            screening_analysis="test",
+            evidence_found="test evidence"
+        )
+        
+        required_fields = [
+            "agent", "candidates", "evidence",
+            "query_used", "confidence_score"
+        ]
+        
+        for field in required_fields:
+            assert field in formatted_prompt, f"Missing required field: {field}"
+    
+    def test_prompt_input_variables(self):
+        """Test that prompt has correct input variables"""
+        assert set(RESEARCH_PROMPT.input_variables) == {"screening_analysis", "evidence_found"}
+    
+    def test_research_output_schema_structure(self):
+        """Test that the research output schema has required fields"""
+        required_keys = [
+            "agent", "candidates", "evidence", 
+            "query_used", "confidence_score"
+        ]
+        
+        for key in required_keys:
+            assert key in RESEARCH_OUTPUT_SCHEMA, f"Missing schema field: {key}"
+    
+    def test_prompt_references_regulatory_concepts(self):
+        """Test that research prompt references regulatory/compliance concepts"""
+        formatted_prompt = RESEARCH_PROMPT.format(
+            screening_analysis="Supplier X AML risk",
+            evidence_found="Evidence sample"
+        )
+        
+        regulatory_concepts = [
+            "regulation", "compliance", "jurisdiction", 
+            "governance", "legal", "obligations"
+        ]
+        
+        found_concepts = sum(1 for concept in regulatory_concepts 
+                            if concept.lower() in formatted_prompt.lower())
+        
+        assert found_concepts >= 3, f"Should reference multiple regulatory concepts, found {found_concepts}"
+    
+    def test_prompt_emphasizes_evidence_synthesis(self):
+        """Test that research prompt emphasizes evidence-based reasoning"""
+        formatted_prompt = RESEARCH_PROMPT.format(
+            screening_analysis="Supplier X flagged",
+            evidence_found="Sample evidence"
+        )
+        
+        keywords = [
+            "evidence", "support", "justify", 
+            "sources", "context", "retrieved"
+        ]
+        
+        found_keywords = sum(1 for kw in keywords if kw.lower() in formatted_prompt.lower())
+        
+        assert found_keywords >= 3, "Should emphasize evidence-based synthesis"
