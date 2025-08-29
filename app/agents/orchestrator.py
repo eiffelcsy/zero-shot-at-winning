@@ -18,7 +18,7 @@ class ComplianceOrchestrator:
         # Initialize agents with memory overlay support
         self.screening_agent = ScreeningAgent(memory_overlay=memory_overlay)
         self.research_agent = ResearchAgent(memory_overlay=memory_overlay)
-        # self.validation_agent = ValidationAgent()
+        self.validation_agent = ValidationAgent(memory_overlay=memory_overlay)
         # self.learning_agent = LearningAgent()
         
         # Build workflow
@@ -43,7 +43,7 @@ class ComplianceOrchestrator:
         # Add nodes - agents handle LangGraph state directly
         workflow.add_node("screening", self.screening_agent.process)
         workflow.add_node("research", self.research_agent.process)
-        # workflow.add_node("validation", self.validation_agent.process)
+        workflow.add_node("validation", self.validation_agent.process)
         # workflow.add_node("learning", self.learning_agent.process)
         
         # Define flow
@@ -55,13 +55,13 @@ class ComplianceOrchestrator:
             self._route_after_screening,
             {
                 "research": "research",
-                # "validation": "validation",
+                "validation": "validation",
                 "end": END
             }
         )
         
-        workflow.add_edge("research", END)
-        # workflow.add_edge("validation", 'learning')
+        workflow.add_edge("research", "validation")
+        workflow.add_edge("validation", END)
         # workflow.add_edge("learning", END)
         
         return workflow.compile()

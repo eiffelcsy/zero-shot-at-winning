@@ -26,8 +26,8 @@ class ValidationAgent(BaseComplianceAgent):
     
     def __init__(self, memory_overlay: str = ""):
         super().__init__("ValidationAgent", temperature=0.0)  # Low temperature for consistency
-        self._setup_chain()
         self.memory_overlay = memory_overlay
+        self._setup_chain()
     
     def _setup_chain(self):
         """Setup LangChain prompt and parser"""
@@ -79,7 +79,7 @@ class ValidationAgent(BaseComplianceAgent):
                 },
                 "validation_completed": True,
                 "validation_timestamp": datetime.now().isoformat(),
-                "workflow_completed": datetime.now().isoformat()
+                "workflow_completed": True
             }
             
         except Exception as e:

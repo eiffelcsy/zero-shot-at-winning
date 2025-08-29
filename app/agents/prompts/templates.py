@@ -291,8 +291,8 @@ Return ONLY valid JSON:
 # Validation prompt template (for future use)
 VALIDATION_PROMPT_TEMPLATE = """
 
-SCREENING ANALYSIS: {screening_result}
-RESEARCH FINDINGS: {research_result}
+SCREENING ANALYSIS: {screening_analysis}
+RESEARCH FINDINGS: {research_evidence}
 
 VALIDATION TASK: Cross-verify the compliance assessment for consistency and accuracy.
 
@@ -301,13 +301,12 @@ Return ONLY valid JSON:
     "needs_geo_logic": "YES",
     "reasoning": "Provide a detailed explanation (10–1200 characters) of why the compliance decision was made, referencing research findings and screening analysis.",
     "related_regulations": [
-        {
-        "name": "General Data Protection Regulation (GDPR)",
+        {{"name": "General Data Protection Regulation (GDPR)",
         "jurisdiction": "EU",
         "section": "Article 44 - Transfers of personal data to third countries",
         "url": "https://gdpr-info.eu/art-44-gdpr/",
         "evidence_excerpt": "Transfers of personal data to a third country may only take place if the conditions laid down in this Regulation are complied with."
-        }
+        }}
     ],
     "confidence_score": 0.85
 }}
