@@ -10,8 +10,6 @@ services:
       - .env
     volumes:
       - ./app:/app
-    depends_on:
-      - chroma
     networks:
       - rag-network
     restart: unless-stopped

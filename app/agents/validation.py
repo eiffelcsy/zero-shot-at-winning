@@ -96,7 +96,7 @@ class ValidationAgent(BaseComplianceAgent):
                 },
                 "validation_completed": True,
                 "validation_timestamp": datetime.now().isoformat(),
-                "workflow_completed": datetime.now().isoformat()
+                "workflow_completed": True
             }
             
         except Exception as e:
