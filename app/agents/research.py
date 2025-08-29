@@ -99,11 +99,9 @@ class ResearchAgent(BaseComplianceAgent):
 
             # Step 4: Extract regulations from retrieved docs (combining candidates and evidence)
             regulations = self._extract_regulations(retrieved_documents["raw_results"])
+            confidence_score = sum([regulation["confidence_score"] for regulation in regulations]) / len(regulations)
 
-            # Step 5: Calculate confidence based on retrieval quality
-            confidence_score = self._calculate_confidence(retrieved_documents["raw_results"], screening_analysis)
-
-            # Step 6: Use LLM for final synthesis
+            # Step 5: Use LLM for final synthesis
             llm_input = {
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
                 "evidence_found": json.dumps(regulations[:5], indent=2),
@@ -111,7 +109,7 @@ class ResearchAgent(BaseComplianceAgent):
 
             result = await self.safe_llm_call(llm_input)
 
-            # Step 7: Enhance result with RAG insights
+            # Step 6: Enhance result with RAG insights
             result["regulations"] = regulations
             result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
@@ -136,9 +134,6 @@ class ResearchAgent(BaseComplianceAgent):
             self.logger.error(f"Research agent failed: {e}")
             return self._create_error_response(str(e))
 
-
-
-
     def _extract_regulations(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract regulations from retrieved documents with specified fields"""
         regulations = []
@@ -156,7 +151,7 @@ class ResearchAgent(BaseComplianceAgent):
             
             # Calculate confidence score based on document distance/similarity
             distance = doc.get("distance", 1.0)
-            confidence_score = max(0.0, 10.0 * (1.0 - distance)) if distance is not None else 7.0
+            confidence_score = max(0.0, 100.0 * (1.0 - distance)) if distance is not None else 70.0
             
             # Create regulation entry
             regulation_entry = {
@@ -171,36 +166,6 @@ class ResearchAgent(BaseComplianceAgent):
         # Sort by confidence score descending
         regulations.sort(key=lambda x: x["confidence_score"], reverse=True)
         return regulations[:10]  # Top 10 regulations
-
-
-
-    def _calculate_confidence(self, documents: List[Dict[str, Any]], 
-                            screening_analysis: Dict) -> float:
-        """Calculate confidence based on retrieval quality and screening alignment"""
-        if not documents:
-            return 0.1
-        
-        # Base confidence from document relevance
-        distances = [doc.get("distance", 1.0) for doc in documents if doc.get("distance") is not None]
-        if distances:
-            avg_distance = sum(distances) / len(distances)
-            base_confidence = max(0.1, 1.0 - avg_distance)
-        else:
-            base_confidence = 0.7
-        
-        # Adjust based on geographic scope alignment
-        geo_scope = screening_analysis.get("geographic_scope", [])
-        if geo_scope != ["unknown"]:
-            geo_match_count = 0
-            for doc in documents[:5]:  # Check top 5 docs
-                doc_jurisdiction = doc.get("metadata", {}).get("geo_jurisdiction", "")
-                if any(geo in doc_jurisdiction for geo in geo_scope):
-                    geo_match_count += 1
-            
-            if geo_match_count > 0:
-                base_confidence = min(0.95, base_confidence + 0.1 * (geo_match_count / 5))
-        
-        return round(base_confidence, 2)
 
     def _create_error_response(self, error_message: str) -> Dict[str, Any]:
         """Create standardized error response"""
