@@ -18,7 +18,7 @@ class RelatedRegulation(BaseModel):
 
 class ValidationOutput(BaseModel):
     needs_geo_logic: Literal["YES", "NO", "REVIEW"] = Field(description="Final compliance decision")
-    reasoning: str = Field(description="Detailed reasoning for decision", min_length=10, max_length=1200)
+    reasoning: Dict[str, Any] = Field(description="Detailed reasoning for decision")
     related_regulations: List[RelatedRegulation] = Field(description="Regulations that support the decision")
     confidence_score: float = Field(description="Confidence in the decision 0.0-1.0")
 

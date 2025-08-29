@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 import json
 from datetime import datetime
@@ -12,11 +12,11 @@ from rag.tools.retrieval_tool import RetrievalTool
 from chroma.chroma_connection import get_chroma_client, get_chroma_collection
 
 class ResearchOutput(BaseModel):
-    agent: str
-    regulations: List[Dict[str, Any]]
-    queries_used: List[str]
-    confidence_score: float
-    retrieved_documents: List[Dict[str, Any]]
+    agent: str = Field(description="Agent name")
+    regulations: List[Dict[str, Any]] = Field(description="Regulations found")
+    queries_used: List[str] = Field(description="Queries used to retrieve documents")
+    confidence_score: float = Field(description="Confidence score")
+    retrieved_documents: List[Dict[str, Any]] = Field(description="Retrieved documents")
 
 class ResearchAgent(BaseComplianceAgent):
     """Research Agent - finds relevant regulations using RAG system with ChromaDB"""
@@ -159,7 +159,7 @@ class ResearchAgent(BaseComplianceAgent):
         if not regulations:
             rag_confidence = 0.0
         else:
-            normalized_scores = [reg["confidence_score"] / 100.0 for reg in regulations]
+            normalized_scores = [reg["relevance_score"] for reg in regulations]
             rag_confidence = sum(normalized_scores) / len(normalized_scores)
         
         # LLM confidence (if provided)
@@ -181,25 +181,23 @@ class ResearchAgent(BaseComplianceAgent):
             
             # Get the document content as excerpt (quoted verbatim)
             excerpt = doc.get("document", "")
-            if len(excerpt) > 500:
-                excerpt = excerpt[:500] + "..."
             
             # Fix: Use improved confidence calculation
             distance = doc.get("distance", 1.0)
-            confidence_score = self._calculate_regulation_confidence(distance)
+            relevance_score = self._calculate_regulation_confidence(distance)
             
             # Create regulation entry
             regulation_entry = {
                 "source_filename": source_filename,
                 "regulation_name": reg_name,
                 "excerpt": excerpt,
-                "confidence_score": confidence_score
+                "relevance_score": relevance_score
             }
             
             regulations.append(regulation_entry)
         
         # Sort by confidence score descending
-        regulations.sort(key=lambda x: x["confidence_score"], reverse=True)
+        regulations.sort(key=lambda x: x["relevance_score"], reverse=True)
         return regulations[:10]  # Top 10 regulations
 
     def _calculate_regulation_confidence(self, distance: float) -> float:

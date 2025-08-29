@@ -78,7 +78,7 @@ def check_compliance(feature_title: str, feature_description: str, feature_docum
             f"{API_URL}/check", 
             data=data, 
             files=files if files else None,
-            timeout=60
+            timeout=120
         )
         response.raise_for_status()
         return response.json()
@@ -96,7 +96,7 @@ def submit_feedback(analysis_id: str, feedback_type: str, feedback_text: str = N
             "timestamp": datetime.now().isoformat()
         }
         
-        response = requests.post(f"{API_URL}/feedback", json=payload, timeout=60)
+        response = requests.post(f"{API_URL}/feedback", json=payload, timeout=120)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -133,7 +133,7 @@ def upload_regulation_files_batch(files_with_metadata):
 def get_upload_stats():
     """Get statistics about the PDF upload pipeline."""
     try:
-        response = requests.get(f"{API_BASE_URL}/api/v1/upload-stats", timeout=60)
+        response = requests.get(f"{API_BASE_URL}/api/v1/upload-stats", timeout=120)
         return response.json() if response.status_code == 200 else None
     except Exception as e:
         return None
@@ -214,8 +214,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("""
         <div style="text-align: center; color: rgba(255,255,255,0.6); font-size: 0.8rem;">
-            <p>🚀 TikTok TechJam 2025</p>
-            <p>Built with ❤️ by Zero Shot at Winning</p>
+            <p>TikTok TechJam 2025</p>
+            <p>Built by Zero Shot at Winning</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -226,7 +226,7 @@ if page == "Compliance Checker":
     # Main header
     st.markdown("""
         <div class="main-header">
-            <h1>⚖️ Geo-Regulation Compliance System</h1>
+            <h1>Geo-Regulation Compliance System</h1>
             <p>Automated flagging of features requiring location-specific compliance logic with audit-ready reasoning and regulation mapping</p>
         </div>
     """, unsafe_allow_html=True)
@@ -258,436 +258,75 @@ if page == "Compliance Checker":
         st.success(f"{feature_document.name} uploaded ({feature_document.size:,} bytes)")
     
     # Analysis button
-    analyze_button = st.button("🚀 Analyze Compliance", use_container_width=True, type="primary")
+    analyze_button = st.button("Analyze Compliance", use_container_width=True, type="primary")
     
     # Results section
     if analyze_button:
         if not title or not description:
             st.markdown("""
                 <div class="warning-badge">
-                    ⚠️ Please fill in both Feature Name and Description before analyzing
+                    Please fill in both Feature Name and Description before analyzing
                 </div>
             """, unsafe_allow_html=True)
         else:
-            with st.spinner("🔍 Analyzing feature compliance with LLM agents..."):
+            with st.spinner("Analyzing feature compliance with LLM agents..."):
                 try:
                     # Call the enhanced compliance check with optional document
                     result = check_compliance(title, description, feature_document)
                     
-                    if "error" in result:
-                        st.error(f"Error: {result}")
+                    # Check if there's a meaningful error (not None)
+                    if result.get("error") is not None and result.get("error") != "":
+                        st.error(f"Error: {result['error']}")
                     else:
-                        # Generate analysis ID for feedback tracking
-                        analysis_id = f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.analysis_history)}"
-                        st.session_state.current_analysis_id = analysis_id
-                        
-                        # Store in history with analysis ID
-                        analysis_result = {
-                            "analysis_id": analysis_id,
-                            "timestamp": datetime.now().isoformat(),
-                            "title": title,
-                            "description": description[:100] + "..." if len(description) > 100 else description,
-                            "has_document": feature_document is not None,
-                            "document_name": feature_document.name if feature_document else None,
-                            "flag": result.get("needs_geo_logic", "unknown"),
-                            "workflow_status": "completed" if result.get("workflow_completed") else "partial",
-                            "confidence": result.get("confidence_score", 0.0),
-                            "risk_level": result.get("risk_level", "Unknown"),
-                            "full_result": result
-                        }
-                        st.session_state.analysis_history.append(analysis_result)
-                        
-                        # Results display
+                        # Display results as prettified JSON
                         st.markdown("---")
-                        st.markdown("## Analysis Results")
+                        st.markdown("## Compliance Analysis Results")
                         
-                        # Multi-Agent System Status
-                        st.markdown("### 🤖 Multi-Agent System Status")
-                        
-                        # Get agent statuses from result
-                        agent_statuses = result.get("agent_statuses", {})
-                        agents_completed = result.get("agents_completed", [])
-                        
-                        col1, col2, col3 = st.columns(3)
-                        
+                        # Show basic info
+                        col1, col2 = st.columns(2)
                         with col1:
-                            screening_status = "✅ Complete" if "screening" in agents_completed else "⏳ Pending"
-                            screening_color = "agent-complete" if "screening" in agents_completed else "agent-pending"
-                            st.markdown(f'<span class="agent-status {screening_color}">🔍 Screening Agent: {screening_status}</span>', unsafe_allow_html=True)
-                        
+                            st.markdown(f"**Feature:** {title}")
+                            if feature_document:
+                                st.markdown(f"**Document:** {feature_document.name}")
                         with col2:
-                            research_status = "✅ Complete" if "research" in agents_completed else "⏳ Pending"
-                            research_color = "agent-complete" if "research" in agents_completed else "agent-pending"
-                            st.markdown(f'<span class="agent-status {research_color}">📚 Research Agent: {research_status}</span>', unsafe_allow_html=True)
-                        
-                        with col3:
-                            validation_status = "✅ Complete" if "validation" in agents_completed else "⏳ Pending"
-                            validation_color = "agent-complete" if "validation" in agents_completed else "agent-pending"
-                            st.markdown(f'<span class="agent-status {validation_color}">⚖️ Validation Agent: {validation_status}</span>', unsafe_allow_html=True)
+                            st.markdown(f"**Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                            needs_geo = result.get("needs_geo_logic", "UNKNOWN")
+                            if needs_geo == "YES":
+                                st.markdown("**Result:** Requires geo-logic")
+                            elif needs_geo == "NO":
+                                st.markdown("**Result:** No geo-logic required")
+                            else:
+                                st.markdown("**Result:** Unclear")
                         
                         st.markdown("---")
                         
-                        # Main result
-                        needs_geo_logic = result.get("needs_geo_logic", "UNKNOWN")
-                        if needs_geo_logic == "YES":
-                            st.markdown("""
-                                <div class="success-badge">
-                                    🚩 Feature REQUIRES geo-specific compliance logic
-                                </div>
-                            """, unsafe_allow_html=True)
-                        elif needs_geo_logic == "NO":
-                            st.markdown("""
-                                <div class="info-badge">
-                                    ✅ Feature does NOT require geo-specific compliance logic
-                                </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown("""
-                                <div class="warning-badge">
-                                    ❓ Analysis result unclear - needs review
-                                </div>
-                            """, unsafe_allow_html=True)
+                        # JSON Display
+                        st.markdown("### Complete Analysis Result (JSON)")
+                        st.markdown("*Click to expand and copy the full result*")
                         
-                        # Document processing status
-                        if feature_document:
-                            st.markdown(f"**Document Processed:** {feature_document.name} included in analysis")
+                        # Pretty print the JSON
+                        json_str = json.dumps(result, indent=2, ensure_ascii=False, default=str)
                         
-                        # Multi-Agent Detailed Results
-                        st.markdown("---")
-                        st.markdown("### 🔍 Agent Analysis Details")
+                        # Use code block for better formatting
+                        st.code(json_str, language="json", line_numbers=True)
                         
-                        # Create tabs for each agent's results
-                        agent_tabs = st.tabs(["📋 Screening Results", "🔬 Research Results", "⚖️ Validation Results"])
-                        
-                        with agent_tabs[0]:  # Screening Results
-                            screening_analysis = result.get("screening_analysis")
-                            if screening_analysis:
-                                st.markdown("#### Screening Agent Analysis")
-                                st.info(f"**Risk Assessment:** {screening_analysis.get('risk_level', 'Unknown')}")
-                                st.markdown(f"**Initial Decision:** {screening_analysis.get('compliance_required', 'Unknown')}")
-                                st.markdown(f"**Confidence:** {screening_analysis.get('confidence', 0.0):.1%}")
-                                if screening_analysis.get('reasoning'):
-                                    st.markdown("**Reasoning:**")
-                                    st.markdown(screening_analysis['reasoning'])
-                                
-                                # Show geographic indicators if available
-                                geo_indicators = screening_analysis.get('geographic_indicators', [])
-                                if geo_indicators:
-                                    st.markdown("**Geographic Indicators Found:**")
-                                    for indicator in geo_indicators:
-                                        st.markdown(f"• {indicator}")
-                            else:
-                                st.warning("Screening analysis not available")
-                        
-                        with agent_tabs[1]:  # Research Results
-                            research_analysis = result.get("research_analysis")
-                            if research_analysis:
-                                st.markdown("#### Research Agent Findings")
-                                
-                                # Research statistics
-                                regulations = research_analysis.get('regulations', [])
-                                queries_used = research_analysis.get('queries_used', [])
-                                research_confidence = research_analysis.get('confidence_score', 0.0)
-                                
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    st.metric("Regulations Found", len(regulations))
-                                with col2:
-                                    st.metric("Search Queries", len(queries_used))
-                                with col3:
-                                    st.metric("Research Confidence", f"{research_confidence:.1%}")
-                                
-                                # Show search queries used
-                                if queries_used:
-                                    st.markdown("**Search Queries Used:**")
-                                    for i, query in enumerate(queries_used, 1):
-                                        st.markdown(f"{i}. _{query}_")
-                                
-                                # Show top regulations found
-                                if regulations:
-                                    st.markdown("**Top Regulations Found:**")
-                                    for i, reg in enumerate(regulations[:5], 1):  # Show top 5
-                                        with st.expander(f"{i}. {reg.get('regulation_name', 'Unknown')} (Confidence: {reg.get('confidence_score', 0):.1f}%)", expanded=False):
-                                            st.markdown(f"**Source:** {reg.get('source_filename', 'Unknown')}")
-                                            if reg.get('excerpt'):
-                                                st.markdown("**Excerpt:**")
-                                                st.markdown(f"_{reg['excerpt']}_")
-                            else:
-                                st.warning("Research analysis not available")
-                        
-                        with agent_tabs[2]:  # Validation Results
-                            validation_analysis = result.get("validation_analysis")
-                            final_decision = result.get("final_decision")
-                            
-                            if validation_analysis or final_decision:
-                                st.markdown("#### Validation Agent Decision")
-                                
-                                decision_data = validation_analysis or final_decision
-                                final_needs_geo = decision_data.get('needs_geo_logic', 'UNKNOWN')
-                                final_confidence = decision_data.get('confidence', 0.0)
-                                final_reasoning = decision_data.get('reasoning', '')
-                                
-                                # Decision summary
-                                if final_needs_geo == "YES":
-                                    st.success(f"✅ **FINAL DECISION:** Requires geo-compliance (Confidence: {final_confidence:.1%})")
-                                elif final_needs_geo == "NO":
-                                    st.info(f"ℹ️ **FINAL DECISION:** No geo-compliance required (Confidence: {final_confidence:.1%})")
-                                else:
-                                    st.warning(f"⚠️ **FINAL DECISION:** Needs review (Confidence: {final_confidence:.1%})")
-                                
-                                if final_reasoning:
-                                    st.markdown("**Final Reasoning:**")
-                                    st.markdown(final_reasoning)
-                                
-                                # Validation metadata
-                                if validation_analysis and validation_analysis.get('validation_metadata'):
-                                    metadata = validation_analysis['validation_metadata']
-                                    st.markdown("**Validation Details:**")
-                                    st.markdown(f"• Evidence pieces reviewed: {metadata.get('evidence_pieces_reviewed', 0)}")
-                                    st.markdown(f"• Regulations cited: {metadata.get('regulations_cited', 0)}")
-                            else:
-                                st.warning("Validation analysis not completed")
-                        
-                        # Detailed results in columns
+                        # Download option
+                        st.markdown("### Download Results")
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            # Confidence and Risk
-                            confidence = result.get("confidence_score", 0.0)
-                            risk_level = result.get("risk_level", "Unknown")
-                            
-                            st.markdown("#### Confidence Score")
-                            st.progress(confidence)
-                            st.markdown(f"**{confidence:.1%}** confidence in analysis")
-                            
-                            st.markdown("#### Risk Level")
-                            risk_color = "🔴" if risk_level == "High" else "🟡" if risk_level == "Medium" else "🟢"
-                            st.markdown(f"{risk_color} **{risk_level}** Risk")
-                        
-                        with col2:
-                            # Reasoning
-                            st.markdown("#### Analysis Reasoning")
-                            st.info(result.get("reasoning", "No reasoning provided"))
-                        
-                        # Related Regulations - Enhanced display
-                        related_regs = result.get("related_regulations", [])
-                        if related_regs:
-                            st.markdown("#### 📋 Related Regulations")
-                            
-                            # Display regulations with better formatting
-                            for i, reg in enumerate(related_regs, 1):
-                                if isinstance(reg, dict):
-                                    # Structured regulation object
-                                    reg_name = reg.get("name", reg.get("regulation_name", "Unknown Regulation"))
-                                    jurisdiction = reg.get("jurisdiction", "Unknown Jurisdiction")
-                                    section = reg.get("section", "")
-                                    url = reg.get("url", "")
-                                    excerpt = reg.get("evidence_excerpt", reg.get("excerpt", ""))
-                                    
-                                    with st.expander(f"**{i}. {reg_name}** ({jurisdiction})", expanded=False):
-                                        if section:
-                                            st.markdown(f"**Section:** {section}")
-                                        if url:
-                                            st.markdown(f"**URL:** {url}")
-                                        if excerpt:
-                                            st.markdown(f"**Evidence:**")
-                                            st.markdown(f"_{excerpt}_")
-                                else:
-                                    # Simple string regulation
-                                    st.markdown(f"**{i}.** {reg}")
-                        else:
-                            st.markdown("#### 📋 Related Regulations")
-                            st.info("No specific regulations identified in this analysis.")
-                        
-                        # Enhanced Feedback Section
-                        st.markdown("---")
-                        st.markdown("### Help Improve Our Multi-Agent System")
-                        
-                        # Initialize feedback state for this analysis
-                        feedback_key = f"feedback_{analysis_id}"
-                        if feedback_key not in st.session_state:
-                            st.session_state[feedback_key] = {
-                                'submitted': False,
-                                'type': None,
-                                'requires_text': False
-                            }
-                        
-                        feedback_state = st.session_state[feedback_key]
-                        
-                        if not feedback_state['submitted']:
-                            st.markdown("Your feedback trains our agents to provide better compliance analysis:")
-                            
-                            # Feedback buttons
-                            feedback_col1, feedback_col2, feedback_col3 = st.columns(3)
-                            
-                            with feedback_col1:
-                                if st.button("✅ Accurate Analysis", key=f"feedback_positive_{analysis_id}", use_container_width=True, type="primary"):
-                                    # Positive feedback - just submit
-                                    feedback_result = submit_feedback(analysis_id, "positive")
-                                    if "error" not in feedback_result:
-                                        feedback_state['submitted'] = True
-                                        feedback_state['type'] = 'positive'
-                                        st.rerun()
-                                    else:
-                                        st.error(f"Failed to submit feedback: {feedback_result['error']}")
-                            
-                            with feedback_col2:
-                                if st.button("❌ Incorrect Result", key=f"feedback_negative_{analysis_id}", use_container_width=True):
-                                    feedback_state['requires_text'] = True
-                                    feedback_state['type'] = 'negative'
-                                    st.rerun()
-                            
-                            with feedback_col3:
-                                if st.button("🤔 Needs More Context", key=f"feedback_context_{analysis_id}", use_container_width=True):
-                                    feedback_state['requires_text'] = True
-                                    feedback_state['type'] = 'needs_context'
-                                    st.rerun()
-                            
-                            # Handle negative feedback or context feedback (requires text input)
-                            if feedback_state['requires_text'] and feedback_state['type']:
-                                st.markdown("---")
-                                
-                                if feedback_state['type'] == 'negative':
-                                    st.markdown("""
-                                        <div class="feedback-section required-feedback">
-                                            <h4>Help Us Understand What Went Wrong</h4>
-                                            <p><strong>This feedback is required</strong> to help our agents learn from mistakes.</p>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    correction_text = st.text_area(
-                                        "What should the correct analysis be?*",
-                                        placeholder="e.g., This feature should NOT require geo-compliance because it doesn't process location data or implement region-specific restrictions...",
-                                        help="Please provide detailed feedback about what the correct analysis should be",
-                                        key=f"correction_{analysis_id}",
-                                        height=100
-                                    )
-                                    
-                                    # Correction details
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        correct_flag = st.selectbox(
-                                            "Correct Flag Should Be:",
-                                            ["Yes - Requires geo-compliance", "No - Does not require geo-compliance"],
-                                            key=f"correct_flag_{analysis_id}"
-                                        )
-                                    
-                                    with col2:
-                                        correct_risk = st.selectbox(
-                                            "Correct Risk Level:",
-                                            ["Low", "Medium", "High"],
-                                            key=f"correct_risk_{analysis_id}"
-                                        )
-                                    
-                                    if st.button(f"Submit Correction (Required)", key=f"submit_correction_{analysis_id}", 
-                                               disabled=not correction_text.strip(), type="primary"):
-                                        correction_data = {
-                                            "correct_flag": "yes" if "Yes" in correct_flag else "no",
-                                            "correct_risk_level": correct_risk,
-                                            "original_result": result
-                                        }
-                                        
-                                        feedback_result = submit_feedback(
-                                            analysis_id, 
-                                            "negative", 
-                                            correction_text, 
-                                            correction_data
-                                        )
-                                        
-                                        if "error" not in feedback_result:
-                                            feedback_state['submitted'] = True
-                                            st.success("🚀 Correction submitted! Our agents will learn from this.")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Failed to submit feedback: {feedback_result['error']}")
-                                
-                                elif feedback_state['type'] == 'needs_context':
-                                    st.markdown("""
-                                        <div class="feedback-section required-feedback">
-                                            <h4>Help Us Improve Context Understanding</h4>
-                                            <p><strong>This feedback is required</strong> to help our agents provide better analysis.</p>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    context_text = st.text_area(
-                                        "What additional context would improve this analysis?*",
-                                        placeholder="e.g., Need to consider specific industry regulations, regional variations, technical implementation details, etc.",
-                                        help="Please provide specific context that would help improve future analyses",
-                                        key=f"context_{analysis_id}",
-                                        height=100
-                                    )
-                                    
-                                    if st.button(f"📝 Submit Context (Required)", key=f"submit_context_{analysis_id}", 
-                                               disabled=not context_text.strip(), type="primary"):
-                                        feedback_result = submit_feedback(analysis_id, "needs_context", context_text)
-                                        
-                                        if "error" not in feedback_result:
-                                            feedback_state['submitted'] = True
-                                            st.success("Context submitted! This will help improve future analyses.")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Failed to submit feedback: {feedback_result['error']}")
-                        
-                        else:
-                            # Show feedback confirmation
-                            if feedback_state['type'] == 'positive':
-                                st.markdown("""
-                                    <div class="feedback-section">
-                                        <h4>Thanks for the positive feedback!</h4>
-                                        <p>Your confirmation helps our agents learn successful analysis patterns.</p>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                            else:
-                                st.markdown("""
-                                    <div class="feedback-section">
-                                        <h4>Feedback Submitted Successfully!</h4>
-                                        <p>Thank you for helping improve our multi-agent system.</p>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                        
-                        # Export options
-                        st.markdown("---")
-                        st.markdown("### Export Analysis")
-                        
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            # CSV export with enhanced data
-                            csv_data = f"Analysis ID,Title,Description,Has Document,Needs Geo Logic,Confidence,Risk Level,Agents Completed,Evidence Sources,Reasoning\n"
-                            agents_completed_str = ";".join(result.get("agents_completed", []))
-                            csv_data += f'"{analysis_id}","{title}","{description}","{feature_document is not None}","{needs_geo_logic}",{confidence},"{risk_level}","{agents_completed_str}",{result.get("evidence_sources", 0)},"{result.get("reasoning", "")}"'
-                            
                             st.download_button(
-                                label="Download CSV Report",
-                                data=csv_data,
-                                file_name=f"compliance_report_{analysis_id}.csv",
-                                mime="text/csv",
-                                use_container_width=True
-                            )
-                        
-                        with col2:
-                            # JSON export
-                            export_data = {
-                                "analysis_id": analysis_id,
-                                "feature": {"title": title, "description": description, "has_document": feature_document is not None},
-                                "result": result,
-                                "timestamp": datetime.now().isoformat()
-                            }
-                            json_data = json.dumps(export_data, indent=2)
-                            st.download_button(
-                                label="Download JSON Report",
-                                data=json_data,
-                                file_name=f"compliance_analysis_{analysis_id}.json",
+                                label="Download as JSON",
+                                data=json_str,
+                                file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                                 mime="application/json",
                                 use_container_width=True
                             )
                         
-                        with col3:
+                        with col2:
                             if st.button("Analyze Another Feature", use_container_width=True):
-                                # Clear current analysis state
-                                st.session_state.current_analysis_id = None
                                 st.rerun()
-                
+                    
                 except Exception as e:
                     st.markdown(f"""
                         <div class="warning-badge">
@@ -765,7 +404,7 @@ elif page == "Upload Regulations":
                 if regulation_name and geo_jurisdiction:
                     st.success("Metadata complete")
                 else:
-                    st.warning("⚠️ Please fill in both regulation name and geographic jurisdiction")
+                    st.warning("Please fill in both regulation name and geographic jurisdiction")
         
         # Check if all metadata is complete
         all_metadata_complete = all(
@@ -793,7 +432,7 @@ elif page == "Upload Regulations":
         
         with col2:
             upload_disabled = not all_metadata_complete
-            button_text = "🚀 Upload All Files" if all_metadata_complete else "⚠️ Complete Metadata First"
+            button_text = "Upload All Files" if all_metadata_complete else "Complete Metadata First"
             
             if st.button(button_text, use_container_width=True, type="primary", disabled=upload_disabled):
                 if all_metadata_complete:
@@ -822,20 +461,20 @@ elif page == "Upload Regulations":
                             else:
                                 st.error(f"Upload failed: {str(response)}")
                         except Exception as e:
-                            st.error(f"❌Upload error: {str(e)}")
+                            st.error(f"Upload error: {str(e)}")
                 else:
-                    st.error("❌ Please complete metadata for all files before uploading")
+                    st.error("Please complete metadata for all files before uploading")
 
     # Supported regulations info
     st.markdown("---")
     st.markdown("### Currently Supported Regulations")
     
     regulations = [
-        {"name": "EU Digital Service Act (DSA)", "status": "✅ Active", "coverage": "EU"},
-        {"name": "California - Protecting Our Kids from Social Media Addiction Act", "status": "✅ Active", "coverage": "CA, US"},
-        {"name": "Florida - Online Protections for Minors", "status": "✅ Active", "coverage": "FL, US"},
-        {"name": "Utah Social Media Regulation Act", "status": "✅ Active", "coverage": "UT, US"},
-        {"name": "US NCMEC Reporting Requirements", "status": "✅ Active", "coverage": "US"},
+        {"name": "EU Digital Service Act (DSA)", "status": "Active", "coverage": "EU"},
+        {"name": "California - Protecting Our Kids from Social Media Addiction Act", "status": "Active", "coverage": "CA, US"},
+        {"name": "Florida - Online Protections for Minors", "status": "Active", "coverage": "FL, US"},
+        {"name": "Utah Social Media Regulation Act", "status": "Active", "coverage": "UT, US"},
+        {"name": "US NCMEC Reporting Requirements", "status": "Active", "coverage": "US"},
     ]
     
     for reg in regulations:
@@ -901,9 +540,8 @@ elif page == "Analytics Dashboard":
 # --- Footer ---
 st.markdown("---")
 st.markdown("""
-    <div style="text-align: center; color: rgba(255,255,255,0.6); padding: 2rem;">
+    <div style="text-align: center; color: rgba(255,255,255,0.6);">
         <p><strong>TikTok TechJam 2025</strong> | Geo-Regulation Compliance System</p>
-        <p>Built with Streamlit • Powered by LLM Agents • Ensuring Global Compliance</p>
-        <p style="font-size: 0.8rem;">Mobile-Optimized | iOS & Android Compatible</p>
+        <p>Built with Streamlit • Team Zero Shot at Winning</p>
     </div>
 """, unsafe_allow_html=True)

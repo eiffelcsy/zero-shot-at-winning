@@ -36,8 +36,8 @@ class ComplianceResponse(BaseModel):
     """Response model for compliance analysis"""
     session_id: Optional[str] = Field(description="Session ID for tracking")
     feature_name: str = Field(description="Name of the analyzed feature")
-    needs_geo_logic: str = Field(description="Whether feature needs geo-specific logic (YES/NO/UNKNOWN)")
-    reasoning: str = Field(description="Detailed reasoning for the decision")
+    needs_geo_logic: str = Field(description="Whether feature needs geo-specific logic (YES/NO/REVIEW/UNKNOWN)")
+    reasoning: Dict[str, Any] = Field(description="Detailed reasoning for the decision")
     related_regulations: List[Dict[str, Any]] = Field(default=[], description="List of related regulation objects")
     confidence_score: float = Field(description="Confidence score between 0.0 and 1.0")
     risk_level: str = Field(description="Risk level (LOW/MEDIUM/HIGH/UNKNOWN)")
