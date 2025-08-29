@@ -17,7 +17,6 @@ class RetrievalToolInput(BaseModel):
     """Input schema for the RetrievalTool."""
     query: str = Field(description="The search query string to retrieve relevant documents")
     n_results: Optional[int] = Field(default=5, description="Number of results to retrieve")
-    metadata_filter: Optional[Dict[str, Any]] = Field(default=None, description="Optional metadata filter for retrieval")
 
 
 class RetrievalTool(BaseTool):
@@ -68,7 +67,6 @@ class RetrievalTool(BaseTool):
         self,
         query: str,
         n_results: int = 5,
-        metadata_filter: Optional[Dict[str, Any]] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> List[Dict[str, Any]]:
         """
@@ -77,7 +75,6 @@ class RetrievalTool(BaseTool):
         Args:
             query: The input query string
             n_results: Number of results to retrieve
-            metadata_filter: Optional metadata filter for retrieval
             run_manager: Optional callback manager for tool runs
             
         Returns:
@@ -90,59 +87,53 @@ class RetrievalTool(BaseTool):
         self,
         query: str,
         n_results: int = 5,
-        metadata_filter: Optional[Dict[str, Any]] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Execute the retrieval workflow: enhance query -> retrieve documents.
         
         Args:
             query: The input query string
             n_results: Number of results to retrieve
-            metadata_filter: Optional metadata filter for retrieval
             run_manager: Optional callback manager for async tool runs
             
         Returns:
-            List of raw retrieval result dictionaries from ChromaDB
+            Dictionary containing raw_results (list), enhanced_queries (list), and enhanced_query (str)
         """
         try:
             # Handle empty or None queries
             if not query or not query.strip():
-                return []
+                return {
+                    "raw_results": [], 
+                    "enhanced_queries": [],
+                    "enhanced_query": ""
+                }
             
             # Step 1: Enhance the query
-            enhanced_query = await self._enhance_query(query)
+            enhanced_queries = await self.query_processor.expand_query(query)
             
             # Step 2: Retrieve documents
             kwargs = {"n_results": n_results}
-            if metadata_filter is not None:
-                kwargs["metadata_filter"] = metadata_filter
                 
-            raw_results = await self._retrieve_documents(enhanced_query, **kwargs)
+            raw_results = []
+            for enhanced_query in enhanced_queries:
+                res = await self._retrieve_documents(enhanced_query, **kwargs)
+                logger.info(res)
+                raw_results.extend(res)
             
-            # Return raw results for downstream synthesis
-            return {"raw_results": raw_results, "enhanced_query": enhanced_query}
+            # Return raw results and enhanced queries for downstream synthesis
+            return {
+                "raw_results": raw_results, 
+                "enhanced_queries": enhanced_queries,
+            }
             
         except Exception as e:
             logger.error(f"Error in retrieval tool run: {e}")
             # Return empty results on error to maintain stability
-            return []
-    
-    async def _enhance_query(self, query: str) -> str:
-        """
-        Enhance the query using the query processor.
-        
-        Args:
-            query: Original query string
-            
-        Returns:
-            Enhanced query string
-        """
-        try:
-            return await self.query_processor.expand_query(query)
-        except Exception as e:
-            logger.warning(f"Query enhancement failed, using original query: {e}")
-            return query
+            return {
+                "raw_results": [], 
+                "enhanced_queries": [],
+            }
     
     async def _retrieve_documents(self, enhanced_query: str, **kwargs) -> List[Dict[str, Any]]:
         """
@@ -157,26 +148,18 @@ class RetrievalTool(BaseTool):
         """
         try:
             n_results = kwargs.get('n_results', 5)
-            metadata_filter = kwargs.get('metadata_filter')
             
             # Generate embedding for the enhanced query
             query_embedding = await self._generate_query_embedding(enhanced_query)
             
             # Retrieve documents using the embedding
-            if metadata_filter:
-                return self.retriever.retrieve_with_metadata_filter(
-                    query_embedding=query_embedding,
-                    metadata_filter=metadata_filter,
-                    n_results=n_results
-                )
-            else:
-                return self.retriever.retrieve(
-                    query_embedding=query_embedding,
-                    n_results=n_results
-                )
+            return self.retriever.retrieve(
+                query_embedding=query_embedding,
+                n_results=n_results
+            )
             
         except Exception as e:
-            logger.error(f"Document retrieval failed: {e}")
+            logger.info(f"Document retrieval failed: {e}")
             return []
     
     async def _generate_query_embedding(self, query: str) -> List[float]:

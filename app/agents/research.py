@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 import json
 from datetime import datetime
 
-from .prompts.templates import build_research_prompt
+from .prompts.templates import build_research_prompt, build_search_query_prompt
 from .base import BaseComplianceAgent
 from langgraph.graph import END
 from rag.retrieval.query_processor import QueryProcessor
@@ -55,6 +55,24 @@ class ResearchAgent(BaseComplianceAgent):
         self.memory_overlay = new_memory_overlay
         self._setup_chain()
 
+    async def _generate_search_query_llm(self, screening_analysis: Dict) -> str:
+        """Generate search query using LLM based on screening analysis"""
+        search_query_prompt = build_search_query_prompt(self.memory_overlay)
+        
+        llm_input = {
+            "screening_analysis": json.dumps(screening_analysis, indent=2)
+        }
+        
+        # Create simple chain for query generation
+        chain = search_query_prompt | self.llm
+        result = await chain.ainvoke(llm_input)
+        
+        # Extract just the string content from the result
+        search_query = result.content.strip()
+        
+        self.logger.info(f"Generated search query: {search_query}")
+        return search_query
+
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """RAG-based research process using vector storage and retrieval"""
         try:
@@ -66,26 +84,18 @@ class ResearchAgent(BaseComplianceAgent):
 
             # Extract key parameters from screening
             geographic_scope = screening_analysis.get("geographic_scope", [])
-            trigger_keywords = screening_analysis.get("trigger_keywords", [])
-            feature_description = state.get("feature_description", "")
 
-            # Step 1: Build search query from screening results
-            base_query = self._build_search_query(
-                feature_description, screening_analysis, trigger_keywords
-            )
+            # Step 1: Generate search query using LLM
+            base_query = await self._generate_search_query_llm(screening_analysis)
 
-            # Step 2: Build metadata filter for geographic scope
-            metadata_filter = self._build_metadata_filter(geographic_scope)
-
-            # Step 3: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
+            # Step 2: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
             retrieved_documents = await self.retrieval_tool.ainvoke({
                 "query": base_query,
-                "n_results": 10,
-                "metadata_filter": metadata_filter
+                "n_results": 5
             })
             
             # Get the enhanced query for logging purposes
-            expanded_query = retrieved_documents["enhanced_query"]
+            expanded_queries = retrieved_documents["enhanced_queries"]
 
             # Step 4: Extract candidates and evidence from retrieved docs
             candidates = self._extract_candidates(retrieved_documents["raw_results"])
@@ -97,7 +107,7 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 6: Use LLM for final synthesis
             llm_input = {
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "evidence_found": json.dumps(evidence[:5], indent=2)  # Top 5 for LLM context
+                "evidence_found": json.dumps(evidence[:5], indent=2),
             }
 
             result = await self.safe_llm_call(llm_input)
@@ -105,9 +115,10 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 7: Enhance result with RAG insights
             result["evidence"] = evidence
             result["candidates"] = candidates
-            result["query_used"] = expanded_query
+            result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
             result["confidence_score"] = confidence_score
+            result["retrieved_documents"] = retrieved_documents["raw_results"]
 
             self.log_interaction(state, result)
 
@@ -115,8 +126,9 @@ class ResearchAgent(BaseComplianceAgent):
             return {
                 "research_evidence": result["evidence"],
                 "research_candidates": result["candidates"],
-                "research_query": result["query_used"],
+                "research_queries": result["queries_used"],
                 "research_confidence": result["confidence_score"],
+                "research_retrieved_documents": result["retrieved_documents"],
                 "research_analysis": result,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
@@ -127,39 +139,7 @@ class ResearchAgent(BaseComplianceAgent):
             self.logger.error(f"Research agent failed: {e}")
             return self._create_error_response(str(e))
 
-    def _build_search_query(self, feature_description: str, screening_analysis: Dict, 
-                            trigger_keywords: List[str]) -> str:
-        """Build comprehensive search query from inputs"""
-        query_parts = [feature_description]
-        
-        # Add compliance patterns based on screening
-        if screening_analysis.get("age_sensitivity"):
-            query_parts.append("children minors age verification parental consent")
-        
-        if screening_analysis.get("data_sensitivity") in ["T5", "T4"]:
-            query_parts.append("personal data privacy protection")
-        
-        if screening_analysis.get("compliance_required"):
-            query_parts.append("regulatory compliance legal requirements")
-        
-        # Add geographic context
-        geo_scope = screening_analysis.get("geographic_scope", [])
-        if geo_scope and geo_scope != ["unknown"]:
-            query_parts.extend(geo_scope)
-        
-        # Add trigger keywords
-        if trigger_keywords:
-            query_parts.extend(trigger_keywords)
-        
-        return " ".join(query_parts)
-    
-    def _build_metadata_filter(self, geographic_scope: List[str]) -> Dict[str, Any]:
-        """Build metadata filter for geographic scope filtering"""
-        metadata_filter = {}
-        if geographic_scope and geographic_scope != ["unknown"]:
-            # Filter by jurisdiction if available in metadata
-            metadata_filter = {"geo_jurisdiction": {"$in": geographic_scope}}
-        return metadata_filter if metadata_filter else None
+
 
 
     def _extract_candidates(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

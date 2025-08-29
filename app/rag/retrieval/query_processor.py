@@ -22,11 +22,11 @@ class QueryProcessor:
         
         Args:
             llm: Optional language model for query enhancement. 
-                 Should have an 'apredict' async method.
+                 Should have an 'ainvoke' async method.
         """
         self.llm = llm
     
-    async def expand_query(self, query: str) -> str:
+    async def expand_query(self, query: str) -> List[str]:
         """
         Expand a query with related compliance and regulatory terms.
         
@@ -37,15 +37,15 @@ class QueryProcessor:
             query: The original query string
             
         Returns:
-            Enhanced query string with additional relevant terms
+            List of enhanced query strings including the original query
         """
         # Handle empty or None inputs
         if not query or not query.strip():
-            return ""
+            return []
         
-        # If no LLM available, return original query
+        # If no LLM available, return original query as single item list
         if not self.llm:
-            return query
+            return [query]
         
         try:
             # Create a prompt for query expansion focused on compliance/regulatory context
@@ -54,27 +54,36 @@ You are helping to expand a compliance and regulatory query for better document 
 
 Original query: "{query}"
 
-Generate relevant additional terms and phrases that would help find documents related to this query. Focus on:
+Generate relevant additional terms and phrases that work as queries on their own and would help find documents related to this query. Focus on:
 - Legal and regulatory synonyms
 - Related compliance concepts
 - Jurisdictional variations
 - Technical implementation terms
 - Related regulatory frameworks
 
-Provide only the additional terms as a comma-separated list, without explanations or the original query.
+Provide only the 5 most relevant additional terms as a comma-separated list, without explanations or the original query.
 """
-            
             # Get expansion terms from LLM
-            expansion_terms = await self.llm.apredict(expansion_prompt)
+            expansion_response = await self.llm.ainvoke(expansion_prompt)
             
-            # Combine original query with expansion terms
-            expanded_query = f"{query} {expansion_terms}"
-            return expanded_query
+            # Parse the comma-separated response into a list
+            all_queries = self._parse_comma_separated_list(expansion_response.content)
+            
+            # Remove duplicates while preserving order
+            unique_queries = []
+            seen = set()
+            for q in all_queries:
+                q_clean = q.strip()
+                if q_clean and q_clean.lower() not in seen:
+                    unique_queries.append(q_clean)
+                    seen.add(q_clean.lower())
+            
+            return unique_queries
             
         except Exception as e:
             logger.warning(f"Error expanding query '{query}': {e}")
             # Fallback to original query on error
-            return query
+            return [query]
     
     async def generate_multiple_queries(self, query: str, count: int = 5) -> List[str]:
         """
@@ -117,7 +126,7 @@ Make each variation a complete, well-formed question or statement.
 """
             
             # Get variations from LLM
-            variations_response = await self.llm.apredict(variation_prompt)
+            variations_response = await self.llm.ainvoke(variation_prompt)
             
             # Parse the numbered list response
             variations = self._parse_numbered_list(variations_response)
@@ -173,3 +182,27 @@ Make each variation a complete, well-formed question or statement.
                     parsed_items.append(line)
         
         return parsed_items
+    
+    def _parse_comma_separated_list(self, text: str) -> List[str]:
+        """
+        Parse a comma-separated list from LLM response.
+        
+        Args:
+            text: Text containing comma-separated items
+            
+        Returns:
+            List of extracted items without commas, cleaned and filtered
+        """
+        if not text or not text.strip():
+            return []
+        
+        # Split by commas and clean each item
+        items = [item.strip() for item in text.split(',')]
+        
+        # Filter out empty items and items that are too short
+        filtered_items = [
+            item for item in items 
+            if item and len(item) > 2
+        ]
+        
+        return filtered_items

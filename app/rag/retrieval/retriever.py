@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, Optional
 from chromadb.api.models.Collection import Collection
 
-
 class RAGRetriever:
     """
     RAG (Retrieval-Augmented Generation) Retriever for fetching relevant documents
@@ -47,39 +46,7 @@ class RAGRetriever:
         # Transform the ChromaDB response format to our expected format
         return self._format_results(results)
     
-    def retrieve_with_metadata_filter(
-        self,
-        query_embedding: List[float],
-        metadata_filter: Dict[str, Any],
-        n_results: int = 10,
-        include: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Retrieve relevant documents with metadata filtering.
-        
-        Args:
-            query_embedding: Vector embedding of the query
-            metadata_filter: Dictionary of metadata filters to apply
-            n_results: Number of results to retrieve
-            include: List of fields to include in results
-        
-        Returns:
-            List of dictionaries containing filtered retrieved documents
-        """
-        if include is None:
-            include = ['metadatas', 'documents', 'distances']
-        
-        # Query the ChromaDB collection with metadata filter
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=metadata_filter,
-            include=include
-        )
-        
-        # Transform the ChromaDB response format to our expected format
-        return self._format_results(results)
-    
+
     def _format_results(self, raw_results: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Format ChromaDB query results into a standardized format.

@@ -330,6 +330,36 @@ Return ONLY valid JSON:
 }}
 """
 
+SEARCH_QUERY_GENERATION_TEMPLATE = """
+You are a specialized query generation agent that creates optimized search queries for regulatory compliance research.
+
+SCREENING ANALYSIS:
+{screening_analysis}
+
+TASK: Generate an effective search query for retrieving relevant regulatory compliance documents from a knowledge base.
+
+Based on the screening analysis provided, create a search query that will effectively retrieve relevant compliance documents. Consider:
+
+- **Compliance domains**: What types of regulations are likely relevant?
+- **Geographic scope**: Which jurisdictions should be prioritized?
+- **Data sensitivity**: What privacy/data protection aspects are important?
+- **Age sensitivity**: Are child protection laws relevant?
+- **Risk factors**: What specific compliance risks were identified?
+- **Trigger keywords**: What terms indicate regulatory relevance?
+- **Specific laws/regulations**: What specific laws/regulations are found to be relevant in the reasoning?
+
+Create a focused search query that includes:
+1. Primary compliance concepts from the analysis
+2. Relevant geographic/regulatory regions
+3. Domain-specific regulatory terms
+4. Risk-based compliance terms
+5. Any specific laws/regulations found to be relevant in the reasoning
+
+Use terms that would appear in regulatory documents and balance specificity with retrieval breadth.
+
+Return ONLY the search query string, nothing else.
+"""
+
 LEARNING_PROMPT_TEMPLATE = """
 You are a learning planner for a compliance screening system.
 Inputs:
@@ -385,8 +415,14 @@ def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
         template=template
     )
 
+def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
+    return PromptTemplate(
+        input_variables=["screening_analysis"],
+        template=SEARCH_QUERY_GENERATION_TEMPLATE
+    )
+
 def build_learning_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT_TEMPLATE
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + LEARNING_PROMPT_TEMPLATE
     return PromptTemplate(
         input_variables=["feature", "screening", "research", "decision", "feedback"],
         template=template
