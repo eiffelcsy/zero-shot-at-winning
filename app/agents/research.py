@@ -97,9 +97,8 @@ class ResearchAgent(BaseComplianceAgent):
             # Get the enhanced query for logging purposes
             expanded_queries = retrieved_documents["enhanced_queries"]
 
-            # Step 4: Extract candidates and evidence from retrieved docs
-            candidates = self._extract_candidates(retrieved_documents["raw_results"])
-            evidence = self._format_evidence(retrieved_documents["raw_results"])
+            # Step 4: Extract regulations from retrieved docs (combining candidates and evidence)
+            regulations = self._extract_regulations(retrieved_documents["raw_results"])
 
             # Step 5: Calculate confidence based on retrieval quality
             confidence_score = self._calculate_confidence(retrieved_documents["raw_results"], screening_analysis)
@@ -107,14 +106,13 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 6: Use LLM for final synthesis
             llm_input = {
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "evidence_found": json.dumps(evidence[:5], indent=2),
+                "evidence_found": json.dumps(regulations[:5], indent=2),
             }
 
             result = await self.safe_llm_call(llm_input)
 
             # Step 7: Enhance result with RAG insights
-            result["evidence"] = evidence
-            result["candidates"] = candidates
+            result["regulations"] = regulations
             result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
             result["confidence_score"] = confidence_score
@@ -124,8 +122,7 @@ class ResearchAgent(BaseComplianceAgent):
 
             # Return enhanced state update
             return {
-                "research_evidence": result["evidence"],
-                "research_candidates": result["candidates"],
+                "research_regulations": result["regulations"],
                 "research_queries": result["queries_used"],
                 "research_confidence": result["confidence_score"],
                 "research_retrieved_documents": result["retrieved_documents"],
@@ -142,55 +139,40 @@ class ResearchAgent(BaseComplianceAgent):
 
 
 
-    def _extract_candidates(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Extract regulation candidates from retrieved documents"""
-        candidates = []
+    def _extract_regulations(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract regulations from retrieved documents with specified fields"""
+        regulations = []
         seen_regulations = set()
         
         for doc in documents:
             metadata = doc.get("metadata", {})
-            reg_code = metadata.get("regulation_code") or metadata.get("regulation_name")
+            reg_name = metadata.get("regulation_name", "Unknown Regulation")
+            source_filename = metadata.get("source_filename", "unknown.pdf")
             
-            if reg_code and reg_code not in seen_regulations:
-                seen_regulations.add(reg_code)
-                
-                # Calculate score based on document distance/similarity
-                distance = doc.get("distance", 1.0)
-                score = max(0.0, 1.0 - distance) if distance is not None else 0.7
-                
-                candidates.append({
-                    "reg": reg_code,
-                    "why": f"Retrieved from regulatory knowledge base with relevance score {score:.2f}",
-                    "score": score
-                })
-        
-        # Sort by score descending
-        candidates.sort(key=lambda x: x["score"], reverse=True)
-        return candidates[:10]  # Top 10 candidates
-
-    def _format_evidence(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Format retrieved documents as evidence"""
-        evidence = []
-        
-        for doc in documents:
-            metadata = doc.get("metadata", {})
+            # Get the document content as excerpt (quoted verbatim)
+            excerpt = doc.get("document", "")
+            if len(excerpt) > 500:
+                excerpt = excerpt[:500] + "..."
+            
+            # Calculate confidence score based on document distance/similarity
             distance = doc.get("distance", 1.0)
+            confidence_score = max(0.0, 10.0 * (1.0 - distance)) if distance is not None else 7.0
             
-            # Convert distance to similarity score (0-10 scale)
-            score = max(0.0, 10.0 * (1.0 - distance)) if distance is not None else 7.0
-            
-            evidence_item = {
-                "reg": metadata.get("regulation_code", "UNKNOWN"),
-                "jurisdiction": metadata.get("geo_jurisdiction", "Unknown"),
-                "name": metadata.get("regulation_name", "Regulatory Document"),
-                "section": metadata.get("section", "General"),
-                "url": metadata.get("source_url", ""),
-                "excerpt": doc.get("document", "")[:500] + "..." if len(doc.get("document", "")) > 500 else doc.get("document", ""),
-                "score": score
+            # Create regulation entry
+            regulation_entry = {
+                "source_filename": source_filename,
+                "regulation_name": reg_name,
+                "excerpt": excerpt,
+                "confidence_score": round(confidence_score, 1)
             }
-            evidence.append(evidence_item)
+            
+            regulations.append(regulation_entry)
         
-        return evidence
+        # Sort by confidence score descending
+        regulations.sort(key=lambda x: x["confidence_score"], reverse=True)
+        return regulations[:10]  # Top 10 regulations
+
+
 
     def _calculate_confidence(self, documents: List[Dict[str, Any]], 
                             screening_analysis: Dict) -> float:
@@ -223,13 +205,11 @@ class ResearchAgent(BaseComplianceAgent):
     def _create_error_response(self, error_message: str) -> Dict[str, Any]:
         """Create standardized error response"""
         return {
-            "research_evidence": [],
-            "research_candidates": [],
+            "research_regulations": [],
             "research_query": "",
             "research_analysis": {
                 "agent": "ResearchAgent",
-                "candidates": [],
-                "evidence": [],
+                "regulations": [],
                 "query_used": "",
                 "confidence_score": 0.0,
                 "error": error_message

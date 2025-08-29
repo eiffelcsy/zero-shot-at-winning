@@ -275,18 +275,12 @@ Focus on:
 Return ONLY valid JSON:
 {{
     "agent": "ResearchAgent",
-    "candidates": [
-        {{"reg": "regulation_code", "why": "reason_for_selection", "score": 0.85}}
-    ],
-    "evidence": [
+    "regulations": [
         {{
-            "reg": "regulation_code",
-            "jurisdiction": "jurisdiction_name", 
-            "name": "regulation_name",
-            "section": "section_reference",
-            "url": "regulation_url",
+            "source_filename": "filename.pdf",
+            "regulation_name": "regulation_name",
             "excerpt": "relevant_text_snippet",
-            "score": 8.5
+            "confidence_score": 8.5
         }}
     ],
     "query_used": "search_query_constructed",
