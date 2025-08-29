@@ -404,23 +404,26 @@ COMPLIANCE_OUTPUT_SCHEMA = {
     "compliance_patterns": "list of compliance categories detected"
 }
 
+def escape_braces(s: str) -> str:
+    return s.replace("{", "{{").replace("}", "}}")
+
 
 def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + SCREENING_PROMPT
+    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + SCREENING_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "context_documents"],
         template=template
     )
 
 def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + RESEARCH_PROMPT
+    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + RESEARCH_PROMPT
     return PromptTemplate(
         input_variables=["screening_analysis", "evidence_found"],
         template=template
     )
 
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT
+    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + VALIDATION_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "screening_analysis", "research_analysis"],
         template=template
@@ -433,7 +436,7 @@ def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
     )
 
 def build_learning_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + LEARNING_PROMPT
+    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + LEARNING_PROMPT
     return PromptTemplate(
         input_variables=["feature", "screening", "research", "decision", "feedback"],
         template=template
