@@ -133,9 +133,8 @@ class ScreeningAgent(BaseComplianceAgent):
             "has_context_docs": bool(original_state.get("context_documents"))
         }
         
-        # Validate confidence score
-        if not isinstance(result.get("confidence"), (int, float)) or result["confidence"] < 0 or result["confidence"] > 1:
-            result["confidence"] = 0.5
+        # Improved confidence score validation with logging
+        result["confidence"] = self._validate_confidence_score(result.get("confidence"))
         
         # Ensure lists are properly formatted
         if not isinstance(result.get("geographic_scope"), list):
@@ -171,3 +170,14 @@ class ScreeningAgent(BaseComplianceAgent):
         )
         
         return result
+
+    def _validate_confidence_score(self, confidence: Any) -> float:
+        """Validate and normalize confidence score with logging"""
+        if isinstance(confidence, (int, float)) and 0 <= confidence <= 1:
+            return float(confidence)
+        
+        # Log the invalid confidence for debugging
+        self.logger.warning(f"Invalid confidence score received: {confidence}, type: {type(confidence)}")
+        
+        # Return neutral confidence instead of arbitrary 0.5
+        return 0.5

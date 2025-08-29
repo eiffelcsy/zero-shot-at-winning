@@ -96,7 +96,9 @@ class ResearchAgent(BaseComplianceAgent):
 
             # Step 4: Extract regulations from retrieved docs (combining candidates and evidence)
             regulations = self._extract_regulations(retrieved_documents["raw_results"])
-            confidence_score = sum([regulation["confidence_score"] for regulation in regulations]) / len(regulations)
+            
+            # Fix: Use proper confidence calculation with error handling
+            confidence_score = self._calculate_overall_confidence(regulations)
 
             # Step 5: Use LLM for final synthesis
             llm_input = {
@@ -115,7 +117,7 @@ class ResearchAgent(BaseComplianceAgent):
 
             self.log_interaction(state, result)
 
-            # Return enhanced state update
+            # Return enhanced state update with consistent field names
             return {
                 "research_regulations": result["regulations"],
                 "research_queries": result["queries_used"],
@@ -124,17 +126,53 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_analysis": result,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": END
+                "next_step": "validation"  # Fixed: Go to validation agent, not END
             }
 
         except Exception as e:
             self.logger.error(f"Research agent failed: {e}")
-            return self._create_error_response(str(e))
+            # Simplified error handling - return error in state
+            return {
+                "research_regulations": [],
+                "research_queries": [],
+                "research_confidence": 0.0,
+                "research_retrieved_documents": [],
+                "research_analysis": {
+                    "agent": "ResearchAgent",
+                    "regulations": [],
+                    "query_used": "",
+                    "confidence_score": 0.0,
+                    "error": str(e)
+                },
+                "research_error": str(e),
+                "research_completed": True,
+                "research_timestamp": datetime.now().isoformat(),
+                "next_step": "END"
+            }
+
+    def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]]) -> float:
+        """Calculate overall confidence score from individual regulation scores"""
+        if not regulations:
+            return 0.0
+        
+        try:
+            # Normalize individual scores from 0-100 to 0-1 range
+            normalized_scores = [reg["confidence_score"] / 100.0 for reg in regulations]
+            
+            # Calculate weighted average (higher confidence regulations get more weight)
+            total_weight = sum(normalized_scores)
+            if total_weight == 0:
+                return 0.0
+            
+            weighted_avg = sum(score * score for score in normalized_scores) / total_weight
+            return round(weighted_avg, 3)
+        except (KeyError, TypeError, ZeroDivisionError) as e:
+            self.logger.warning(f"Error calculating confidence: {e}, using fallback")
+            return 0.5
 
     def _extract_regulations(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract regulations from retrieved documents with specified fields"""
         regulations = []
-        seen_regulations = set()
         
         for doc in documents:
             metadata = doc.get("metadata", {})
@@ -146,37 +184,39 @@ class ResearchAgent(BaseComplianceAgent):
             if len(excerpt) > 500:
                 excerpt = excerpt[:500] + "..."
             
-            # Calculate confidence score based on document distance/similarity
+            # Fix: Use improved confidence calculation
             distance = doc.get("distance", 1.0)
-            confidence_score = max(0.0, 100.0 * (1.0 - distance)) if distance is not None else 70.0
+            confidence_score = self._calculate_regulation_confidence(distance)
             
             # Create regulation entry
             regulation_entry = {
                 "source_filename": source_filename,
                 "regulation_name": reg_name,
                 "excerpt": excerpt,
-                "confidence_score": round(confidence_score, 1)
+                "confidence_score": confidence_score
             }
             
             regulations.append(regulation_entry)
         
         # Sort by confidence score descending
         regulations.sort(key=lambda x: x["confidence_score"], reverse=True)
-        return regulations[:10]  # Top 10 regulations    def _create_error_response(self, error_message: str) -> Dict[str, Any]:
-        """Create standardized error response"""
-        return {
-            "research_regulations": [],
-            "research_query": "",
-            "research_analysis": {
-                "agent": "ResearchAgent",
-                "regulations": [],
-                "query_used": "",
-                "confidence_score": 0.0,
-                "error": error_message
-            },
-            "research_error": error_message,
-            "research_completed": True,
-            "research_timestamp": datetime.now().isoformat(),
-            "next_step": "validation"
-        }
+        return regulations[:10]  # Top 10 regulations
+
+    def _calculate_regulation_confidence(self, distance: float) -> float:
+        """Calculate confidence score from document distance"""
+        if distance is None:
+            return 50.0  # Neutral confidence for unknown distance
+        
+        try:
+            # Normalize distance to 0-1 range (assuming ChromaDB returns 0-1)
+            # Higher distance = lower confidence
+            confidence = max(0.0, 1.0 - distance)
+            
+            # Apply sigmoid-like transformation for better score distribution
+            confidence = confidence ** 0.5  # Square root for better curve
+            
+            return round(confidence * 100, 1)  # Return 0-100 range for individual scores
+        except (TypeError, ValueError) as e:
+            self.logger.warning(f"Error calculating regulation confidence: {e}, using fallback")
+            return 50.0
 
