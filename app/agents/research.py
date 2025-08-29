@@ -78,21 +78,21 @@ class ResearchAgent(BaseComplianceAgent):
             metadata_filter = self._build_metadata_filter(geographic_scope)
 
             # Step 3: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
-            retrieved_documents = await self.retrieval_tool._arun(
-                query=base_query,
-                n_results=15,
-                metadata_filter=metadata_filter
-            )
+            retrieved_documents = await self.retrieval_tool.ainvoke({
+                "query": base_query,
+                "n_results": 10,
+                "metadata_filter": metadata_filter
+            })
             
             # Get the enhanced query for logging purposes
-            expanded_query = await self.retrieval_tool._enhance_query(base_query)
+            expanded_query = retrieved_documents["enhanced_query"]
 
             # Step 4: Extract candidates and evidence from retrieved docs
-            candidates = self._extract_candidates(retrieved_documents)
-            evidence = self._format_evidence(retrieved_documents)
+            candidates = self._extract_candidates(retrieved_documents["raw_results"])
+            evidence = self._format_evidence(retrieved_documents["raw_results"])
 
             # Step 5: Calculate confidence based on retrieval quality
-            confidence_score = self._calculate_confidence(retrieved_documents, screening_analysis)
+            confidence_score = self._calculate_confidence(retrieved_documents["raw_results"], screening_analysis)
 
             # Step 6: Use LLM for final synthesis
             llm_input = {

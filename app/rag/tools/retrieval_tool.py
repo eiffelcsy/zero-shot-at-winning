@@ -121,7 +121,7 @@ class RetrievalTool(BaseTool):
             raw_results = await self._retrieve_documents(enhanced_query, **kwargs)
             
             # Return raw results for downstream synthesis
-            return raw_results
+            return {"raw_results": raw_results, "enhanced_query": enhanced_query}
             
         except Exception as e:
             logger.error(f"Error in retrieval tool run: {e}")

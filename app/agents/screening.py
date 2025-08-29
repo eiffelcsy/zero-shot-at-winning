@@ -45,14 +45,15 @@ class ScreeningAgent(BaseComplianceAgent):
             feature_description = state.get("feature_description", "")
             context_documents = state.get("context_documents", "")
             
-            if not feature_description:
-                raise ValueError("Missing feature description")
+            if not feature_name or not feature_description:
+                raise ValueError("Missing feature name or description")
             
             # Prepare context documents string
             context_docs_str = self._format_context_documents(context_documents)
             
             # Run LLM analysis
             result = await self.safe_llm_call({
+                "feature_name": feature_name,
                 "feature_description": feature_description,
                 "context_documents": context_docs_str
             })
