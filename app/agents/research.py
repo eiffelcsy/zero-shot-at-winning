@@ -162,9 +162,7 @@ class ResearchAgent(BaseComplianceAgent):
         
         # Sort by confidence score descending
         regulations.sort(key=lambda x: x["confidence_score"], reverse=True)
-        return regulations[:10]  # Top 10 regulations
-
-    def _create_error_response(self, error_message: str) -> Dict[str, Any]:
+        return regulations[:10]  # Top 10 regulations    def _create_error_response(self, error_message: str) -> Dict[str, Any]:
         """Create standardized error response"""
         return {
             "research_regulations": [],
@@ -181,3 +179,4 @@ class ResearchAgent(BaseComplianceAgent):
             "research_timestamp": datetime.now().isoformat(),
             "next_step": "validation"
         }
+

@@ -119,8 +119,9 @@ def get_workflow_summary(state: ComplianceState) -> Dict[str, Any]:
         summary["final_risk_level"] = state["screening_analysis"].get("risk_level")
         summary["compliance_required"] = state["screening_analysis"].get("compliance_required")
     
+    # Updated to use new field names
     if state.get("research_analysis"):
-        summary["regulations_found"] = len(state["research_analysis"].get("candidates", []))
+        summary["regulations_found"] = len(state["research_analysis"].get("regulations", []))
         summary["evidence_pieces"] = len(state["research_analysis"].get("evidence", []))
     
     summary["overall_confidence"] = state.get("confidence_score")
