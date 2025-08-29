@@ -97,9 +97,6 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 4: Extract regulations from retrieved docs (combining candidates and evidence)
             regulations = self._extract_regulations(retrieved_documents["raw_results"])
             
-            # Fix: Use proper confidence calculation with error handling
-            confidence_score = self._calculate_overall_confidence(regulations)
-
             # Step 5: Use LLM for final synthesis
             llm_input = {
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
@@ -108,7 +105,11 @@ class ResearchAgent(BaseComplianceAgent):
 
             result = await self.safe_llm_call(llm_input)
 
-            # Step 6: Enhance result with RAG insights
+            # Step 6: Holistic confidence score of document similarity and LLM reasoning quality
+            confidence_score = self._calculate_overall_confidence(regulations, result)
+
+
+            # Step 7: Enhance result with RAG insights
             result["regulations"] = regulations
             result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
@@ -126,7 +127,7 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_analysis": result,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": "validation"  # Fixed: Go to validation agent, not END
+                "next_step": "validation"
             }
 
         except Exception as e:
@@ -147,28 +148,26 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_error": str(e),
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": "END"
+                "next_step": END
             }
 
-    def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]]) -> float:
-        """Calculate overall confidence score from individual regulation scores"""
-        if not regulations:
-            return 0.0
+    def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]], llm_result: Dict) -> float:
+        """Calculate confidence considering both RAG results and LLM analysis"""
         
-        try:
-            # Normalize individual scores from 0-100 to 0-1 range
+        # Base confidence from document similarity
+        if not regulations:
+            rag_confidence = 0.0
+        else:
             normalized_scores = [reg["confidence_score"] / 100.0 for reg in regulations]
-            
-            # Calculate weighted average (higher confidence regulations get more weight)
-            total_weight = sum(normalized_scores)
-            if total_weight == 0:
-                return 0.0
-            
-            weighted_avg = sum(score * score for score in normalized_scores) / total_weight
-            return round(weighted_avg, 3)
-        except (KeyError, TypeError, ZeroDivisionError) as e:
-            self.logger.warning(f"Error calculating confidence: {e}, using fallback")
-            return 0.5
+            rag_confidence = sum(normalized_scores) / len(normalized_scores)
+        
+        # LLM confidence (if provided)
+        llm_confidence = llm_result.get("confidence_score", 0.5)
+        
+        # Combine both confidences (weighted average)
+        combined_confidence = (rag_confidence * 0.6) + (llm_confidence * 0.4)
+        
+        return round(combined_confidence, 3)
 
     def _extract_regulations(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract regulations from retrieved documents with specified fields"""

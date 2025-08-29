@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
 from .prompts.templates import build_screening_prompt
+from langgraph.graph import END
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
@@ -89,7 +90,7 @@ class ScreeningAgent(BaseComplianceAgent):
                     "data_sensitivity": "none"
                 },
                 "screening_completed": True,
-                "next_step": "validation"  # Skip to validation on error
+                "next_step": END
             }
     
     def _format_context_documents(self, context_documents: Any) -> str:
