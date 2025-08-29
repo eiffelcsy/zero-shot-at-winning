@@ -323,7 +323,7 @@ Return ONLY valid JSON:
 """
 
 # Validation prompt template (for future use)
-VALIDATION_PROMPT_TEMPLATE = """
+VALIDATION_PROMPT = """
 
 SCREENING ANALYSIS: {screening_analysis}
 RESEARCH FINDINGS: {research_evidence}
@@ -346,7 +346,7 @@ Return ONLY valid JSON:
 }}
 """
 
-SEARCH_QUERY_GENERATION_TEMPLATE = """
+SEARCH_QUERY_GENERATION = """
 You are a specialized query generation agent that creates optimized search queries for regulatory compliance research.
 
 SCREENING ANALYSIS:
@@ -376,7 +376,7 @@ Use terms that would appear in regulatory documents and balance specificity with
 Return ONLY the search query string, nothing else.
 """
 
-LEARNING_PROMPT_TEMPLATE = """
+LEARNING_PROMPT = """
 You are a learning planner for a compliance screening system.
 Inputs:
 FEATURE: {feature}
@@ -406,21 +406,21 @@ COMPLIANCE_OUTPUT_SCHEMA = {
 
 
 def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + SCREENING_PROMPT_TEMPLATE
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + SCREENING_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "context_documents"],
         template=template
     )
 
 def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + RESEARCH_PROMPT_TEMPLATE
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + RESEARCH_PROMPT
     return PromptTemplate(
         input_variables=["screening_analysis", "evidence_found"],
         template=template
     )
 
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT_TEMPLATE
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + VALIDATION_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "screening_analysis", "research_evidence"],
         template=template
@@ -429,11 +429,11 @@ def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
 def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
     return PromptTemplate(
         input_variables=["screening_analysis"],
-        template=SEARCH_QUERY_GENERATION_TEMPLATE
+        template=SEARCH_QUERY_GENERATION
     )
 
 def build_learning_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + memory_overlay + LEARNING_PROMPT_TEMPLATE
+    template = TIKTOK_CONTEXT + "\n" + memory_overlay + LEARNING_PROMPT
     return PromptTemplate(
         input_variables=["feature", "screening", "research", "decision", "feedback"],
         template=template
