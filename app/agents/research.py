@@ -13,10 +13,10 @@ from chroma.chroma_connection import get_chroma_client, get_chroma_collection
 
 class ResearchOutput(BaseModel):
     agent: str
-    candidates: List[Dict[str, Any]]
-    evidence: List[Dict[str, Any]]
-    query_used: str
+    regulations: List[Dict[str, Any]]
+    queries_used: List[str]
     confidence_score: float
+    retrieved_documents: List[Dict[str, Any]]
 
 class ResearchAgent(BaseComplianceAgent):
     """Research Agent - finds relevant regulations using RAG system with ChromaDB"""
@@ -76,8 +76,13 @@ class ResearchAgent(BaseComplianceAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """RAG-based research process using vector storage and retrieval"""
         try:
-            # Extract screening analysis from state
+            # Extract inputs from state
+            feature_name = state.get("feature_name", "")
+            feature_description = state.get("feature_description", "")
             screening_analysis = state.get("screening_analysis", {})
+            
+            if not feature_name or not feature_description:
+                raise ValueError("Missing feature name or description")
             
             if not screening_analysis:
                 raise ValueError("Missing screening analysis from previous agent")
@@ -99,6 +104,8 @@ class ResearchAgent(BaseComplianceAgent):
             
             # Step 5: Use LLM for final synthesis
             llm_input = {
+                "feature_name": feature_name,
+                "feature_description": feature_description,
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
                 "evidence_found": json.dumps(regulations[:5], indent=2),
             }
@@ -107,7 +114,6 @@ class ResearchAgent(BaseComplianceAgent):
 
             # Step 6: Holistic confidence score of document similarity and LLM reasoning quality
             confidence_score = self._calculate_overall_confidence(regulations, result)
-
 
             # Step 7: Enhance result with RAG insights
             result["regulations"] = regulations
@@ -148,7 +154,7 @@ class ResearchAgent(BaseComplianceAgent):
                 "research_error": str(e),
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
-                "next_step": END
+                "next_step": "END"
             }
 
     def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]], llm_result: Dict) -> float:
