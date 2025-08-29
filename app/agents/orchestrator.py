@@ -72,13 +72,13 @@ class ComplianceOrchestrator:
         
         # End on error
         if screening_analysis.get("error"):
-            return "end"
+            return END
         
         # Route based on research need
         if screening_analysis.get("needs_research", True):
             return "research"
         else:
-            return "end"
+            return END
     
     async def analyze_feature(self, 
                             feature_name: str, 
@@ -99,10 +99,10 @@ class ComplianceOrchestrator:
             final_state = await self.workflow.ainvoke(initial_state)
             
             # Extract and format final result
-            final_decision = final_state.get("final_decision", {})
-            validation_analysis = final_state.get("validation_analysis", {})
             screening_analysis = final_state.get("screening_analysis", {})
             research_analysis = final_state.get("research_analysis", {})
+            validation_analysis = final_state.get("validation_analysis", {})
+            final_decision = final_state.get("final_decision", {})
             
             # Determine which agents completed
             agents_completed = []

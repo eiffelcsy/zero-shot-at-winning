@@ -1,35 +1,17 @@
 from langchain.prompts import PromptTemplate
 
-# [STATIC BASE CONTEXT] + [DYNAMIC MEMORY OVERLAY] + [TASK-SPECIFIC INSTRUCTIONS]
-
-# Internal TikTok context mapping for all agents
-TIKTOK_CONTEXT = """
-INTERNAL TIKTOK TERMINOLOGY (Provides information about what each term/acronym means, critical for analysis):
-- NR: Not recommended (restriction/limitation level)
-- PF: Personalized feed (recommendation algorithm)
-- GH: Geo-handler (region-based routing and enforcement)
-- CDS: Compliance Detection System (automated compliance monitoring)
-- DRT: Data retention threshold (how long data can be stored)
-- LCP: Local compliance policy (region-specific rules)
-- Redline: Flag for legal review (not financial loss context)
-- Softblock: Silent user limitation without notifications
-- Spanner: Rule engine (not Google Spanner database)
-- ShadowMode: Deploy feature without user impact for analytics collection
-- T5: Tier 5 data (highest sensitivity level - more critical than T1-T4)
-- ASL: Age-sensitive logic (age verification/restrictions for minors)
-- Glow: Compliance-flagging status for geo-based alerts
-- NSP: Non-shareable policy (content sharing restrictions)
-- Jellybean: Internal parental control system
-- EchoTrace: Log tracing mode for compliance verification
-- BB: Baseline Behavior (standard user behavior for anomaly detection)
-- Snowcap: Child safety policy framework
-- FR: Feature rollout status
-- IMT: Internal monitoring trigger
-"""
+# [DYNAMIC MEMORY OVERLAY] + [TASK-SPECIFIC INSTRUCTIONS]
+# TIKTOK_CONTEXT is now provided via memory overlay, not hardcoded
 
 # Screening agent prompt template
 SCREENING_PROMPT = """
 You are a specialized compliance screening agent in a multi-agent RAG compliance screening system. Your primary responsibility is to analyze software application features and accurately identify potential compliance requirements and associated risks.
+
+## MANDATORY: TERMINOLOGY ANALYSIS
+Before proceeding with compliance analysis, you MUST:
+1. Identify ALL TikTok-specific acronyms in the feature description
+2. Map each acronym to its exact meaning using the provided terminology reference
+3. Explain how each acronym affects your compliance assessment
 
 FEATURE NAME: {feature_name}
 
@@ -58,13 +40,24 @@ Return ONLY valid JSON matching this schema:
     "needs_research": true/false,
     "geographic_scope": ["region1", "region2"] or "global" or "unknown",
     "age_sensitivity": true/false,
-"data_sensitivity": "T5|T4|T3|T2|T1|none"
+    "data_sensitivity": "T5|T4|T3|T2|T1|none",
+    "terminology_analysis": {{
+        "acronyms_found": ["acronym1", "acronym2"],
+        "acronym_meanings": {{"acronym1": "meaning1", "acronym2": "meaning2"}},
+        "compliance_impact": "explanation of how acronyms affect compliance assessment"
+    }}
 }}
 
 ## Comprehensive Reasoning Framework
 
 ### Multi-Dimensional Analysis Process
 Your reasoning must systematically address these components:
+
+#### 0. TERMINOLOGY MAPPING (REQUIRED FIRST STEP)
+- **Acronym identification**: List every TikTok-specific acronym found in the feature description
+- **Meaning clarification**: Use the provided terminology reference to explain what each acronym means
+- **Compliance relevance**: Explain how understanding these acronyms affects your compliance assessment
+- **Unknown terms**: Flag any technical terms not covered in the provided reference
 
 #### 1. Linguistic Analysis
 - **Exact quotations**: Include direct quotes from the feature description that indicate legal vs. business intent
@@ -261,6 +254,12 @@ You are a specialized Research Agent in a multi-agent RAG compliance screening s
 Your task is to cross-check the Screening Agent's analysis against **retrieved evidence from a regulatory knowledge base** (RAG results).
 You must ONLY return regulations that exist in the provided evidence.
 
+## MANDATORY: TERMINOLOGY CONSISTENCY
+When analyzing the screening analysis, ensure that:
+1. Any TikTok-specific acronyms are interpreted using the provided terminology reference
+2. You understand the compliance context based on the acronym meanings provided
+3. Your search queries account for the technical context revealed by these acronyms
+
 ---
 
 ### INPUTS
@@ -325,6 +324,12 @@ Return ONLY valid JSON:
 SEARCH_QUERY_GENERATION = """
 You are a specialized query generation agent that creates optimized search queries for regulatory compliance research.
 
+## MANDATORY: TERMINOLOGY INTEGRATION
+When generating search queries, you MUST:
+1. Use the TikTok-specific acronym meanings from the provided terminology reference
+2. Convert technical acronyms to their full regulatory-relevant terms
+3. Ensure your search queries capture the compliance context revealed by these acronyms
+
 SCREENING ANALYSIS:
 {screening_analysis}
 
@@ -354,6 +359,12 @@ Return ONLY the search query string, nothing else.
 
 VALIDATION_PROMPT = """
 You are a specialized validation agent in a multi-agent RAG compliance screening system. Your primary responsibility is to validate the accuracy and relevance of compliance analyses, verify the quality of retrieved regulatory documents, and extract the most pertinent regulatory excerpts for feature compliance assessment.
+
+## MANDATORY: TERMINOLOGY VALIDATION
+As part of your validation process, you MUST:
+1. Verify that all TikTok-specific acronyms in the feature description were correctly interpreted using the provided terminology reference
+2. Confirm that the screening agent's understanding of technical terms aligns with the established mapping
+3. Flag any instances where acronyms were misinterpreted or their compliance implications were missed
 
 ## Input Data
 FEATURE NAME: {feature_name}
@@ -657,21 +668,21 @@ def escape_braces(s: str) -> str:
 
 
 def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + SCREENING_PROMPT
+    template = escape_braces(memory_overlay) + SCREENING_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "context_documents"],
         template=template
     )
 
 def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + RESEARCH_PROMPT
+    template = escape_braces(memory_overlay) + RESEARCH_PROMPT
     return PromptTemplate(
-        input_variables=["screening_analysis", "evidence_found"],
+        input_variables=["feature_name", "feature_description", "screening_analysis", "evidence_found"],
         template=template
     )
 
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + VALIDATION_PROMPT
+    template = escape_braces(memory_overlay) + VALIDATION_PROMPT
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "screening_analysis", "research_analysis"],
         template=template
@@ -684,7 +695,7 @@ def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
     )
 
 def build_learning_prompt(memory_overlay: str = "") -> PromptTemplate:
-    template = TIKTOK_CONTEXT + "\n" + escape_braces(memory_overlay) + LEARNING_PROMPT
+    template = escape_braces(memory_overlay) + LEARNING_PROMPT
     return PromptTemplate(
         input_variables=["feature", "screening", "research", "decision", "feedback"],
         template=template

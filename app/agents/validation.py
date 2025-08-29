@@ -93,7 +93,7 @@ class ValidationAgent(BaseComplianceAgent):
                     "needs_geo_logic": result.get("needs_geo_logic", "REVIEW"),
                     "reasoning": result.get("reasoning", ""),
                     "related_regulations": result.get("related_regulations", []),
-                    "confidence": result.get("confidence_score", 0.5),
+                    "confidence": result.get("confidence", 0.5),
                     "agent": "ValidationAgent",
                     "validation_metadata": {
                         "agent": "ValidationAgent",

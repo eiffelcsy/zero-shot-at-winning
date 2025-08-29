@@ -67,7 +67,19 @@ pipeline = PDFIngestionPipeline(
 )
 
 # Initialize the compliance orchestrator for LangGraph multi-agent workflow
-compliance_orchestrator = ComplianceOrchestrator(memory_overlay="")
+# Get proper TikTok terminology overlay from memory store
+from agents.initialize_system import get_agent_overlays
+
+try:
+    overlays = get_agent_overlays()
+    screening_overlay = overlays["screening"]
+    print(f"Loaded TikTok terminology overlay ({len(screening_overlay)} characters)")
+except Exception as e:
+    print(f"Warning: Could not load TikTok terminology overlay: {e}")
+    print("   Run: python app/agents/initialize_system.py to set up terminology")
+    screening_overlay = ""
+
+compliance_orchestrator = ComplianceOrchestrator(memory_overlay=screening_overlay)
 
 # ================================================
 # REGULATION UPLOAD ENDPOINTS

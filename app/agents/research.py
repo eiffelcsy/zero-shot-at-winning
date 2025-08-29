@@ -48,6 +48,17 @@ class ResearchAgent(BaseComplianceAgent):
     def _setup_chain(self):
         """Setup LangChain prompt and parser with dynamic prompt building"""
         research_prompt = build_research_prompt(self.memory_overlay)
+        
+        # Debug: Log memory overlay status
+        if self.memory_overlay:
+            self.logger.info(f"Research agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
+            if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                self.logger.info("TikTok terminology found in memory overlay")
+            else:
+                self.logger.warning("TikTok terminology NOT found in memory overlay")
+        else:
+            self.logger.warning("Research agent initialized with NO memory overlay")
+        
         self.create_chain(research_prompt, ResearchOutput)
     
     def update_memory(self, new_memory_overlay: str):
@@ -56,20 +67,90 @@ class ResearchAgent(BaseComplianceAgent):
         self._setup_chain()
 
     async def _generate_search_query_llm(self, screening_analysis: Dict) -> str:
-        """Generate search query using LLM based on screening analysis"""
-        search_query_prompt = build_search_query_prompt(self.memory_overlay)
+        """Generate optimized search query using LLM with TikTok terminology context"""
         
-        llm_input = {
-            "screening_analysis": json.dumps(screening_analysis, indent=2)
+        # Extract key information for query generation
+        trigger_keywords = screening_analysis.get("trigger_keywords", [])
+        geographic_scope = screening_analysis.get("geographic_scope", [])
+        data_sensitivity = screening_analysis.get("data_sensitivity", "")
+        age_sensitivity = screening_analysis.get("age_sensitivity", False)
+        
+        # Build context for LLM
+        context = {
+            "trigger_keywords": trigger_keywords,
+            "geographic_scope": geographic_scope,
+            "data_sensitivity": data_sensitivity,
+            "age_sensitivity": age_sensitivity,
+            "terminology_analysis": screening_analysis.get("terminology_analysis", {})
         }
         
-        # Create simple chain for query generation
-        chain = search_query_prompt | self.llm
-        result = await chain.ainvoke(llm_input)
+        try:
+            # Create a direct LLM call for search query generation
+            # This bypasses the validation that expects research prompt variables
+            search_prompt = build_search_query_prompt(self.memory_overlay)
+            
+            # Debug: Log search prompt status
+            if self.memory_overlay:
+                self.logger.info(f"Search query generation using memory overlay ({len(self.memory_overlay)} characters)")
+                if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                    self.logger.info("TikTok terminology available for search query generation")
+                else:
+                    self.logger.warning("TikTok terminology NOT available for search query generation")
+            else:
+                self.logger.warning("Search query generation with NO memory overlay")
+            
+            formatted_prompt = search_prompt.format(screening_analysis=context)
+            result = await self.llm.ainvoke(formatted_prompt)
+            if isinstance(result, str):
+                return result
+            elif isinstance(result, dict) and "query" in result:
+                return result["query"]
+            else:
+                # Fallback to basic query construction
+                return self._build_fallback_query(context)
+        except Exception as e:
+            self.logger.warning(f"LLM query generation failed: {e}, using fallback")
+            return self._build_fallback_query(context)
+    
+    def _build_fallback_query(self, context: Dict) -> str:
+        """Build a fallback search query when LLM generation fails"""
+        keywords = context.get("trigger_keywords", [])
+        geo_scope = context.get("geographic_scope", [])
         
-        # Extract just the string content from the result
-        search_query = result.content.strip()
-        return search_query
+        # Basic query construction
+        query_parts = []
+        
+        # Add compliance-related terms
+        if keywords:
+            query_parts.extend(keywords)
+        
+        # Add geographic context
+        if geo_scope and geo_scope != ["global"]:
+            query_parts.extend(geo_scope)
+        
+        # Add data sensitivity context
+        if context.get("data_sensitivity"):
+            query_parts.append("data protection")
+            query_parts.append("privacy")
+        
+        # Add age sensitivity context
+        if context.get("age_sensitivity"):
+            query_parts.append("minor protection")
+            query_parts.append("age verification")
+        
+        # Add TikTok terminology context
+        terminology = context.get("terminology_analysis", {})
+        if terminology.get("acronyms_found"):
+            for acronym in terminology["acronyms_found"]:
+                meaning = terminology.get("acronym_meanings", {}).get(acronym, "")
+                if meaning:
+                    query_parts.append(meaning)
+        
+        # Ensure we have a meaningful query
+        if not query_parts:
+            query_parts = ["compliance", "regulations", "legal requirements"]
+        
+        return " ".join(query_parts)
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """RAG-based research process using vector storage and retrieval"""
@@ -85,8 +166,11 @@ class ResearchAgent(BaseComplianceAgent):
             if not screening_analysis:
                 raise ValueError("Missing screening analysis from previous agent")
 
-            # Step 1: Generate search query using LLM
+            # Step 1: Generate search query using LLM with TikTok terminology context
             base_query = await self._generate_search_query_llm(screening_analysis)
+            
+            # Log the generated query for debugging
+            self.logger.info(f"Generated search query: {base_query}")
 
             # Step 2: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
             retrieved_documents = await self.retrieval_tool.ainvoke({
@@ -95,12 +179,16 @@ class ResearchAgent(BaseComplianceAgent):
             })
             
             # Get the enhanced query for logging purposes
-            expanded_queries = retrieved_documents["enhanced_queries"]
-
-            # Step 4: Extract regulations from retrieved docs (combining candidates and evidence)
-            regulations = self._extract_regulations(retrieved_documents["raw_results"])
+            expanded_queries = retrieved_documents.get("enhanced_queries", [base_query])
             
-            # Step 5: Use LLM for final synthesis
+            # Log retrieval results for debugging
+            self.logger.info(f"Retrieved {len(retrieved_documents.get('raw_results', []))} documents")
+            self.logger.info(f"Enhanced queries: {expanded_queries}")
+
+            # Step 4: Extract regulations from retrieved docs with proper relevance scoring
+            regulations = self._extract_regulations(retrieved_documents.get("raw_results", []))
+            
+            # Step 5: Use LLM for final synthesis with proper input format
             llm_input = {
                 "feature_name": feature_name,
                 "feature_description": feature_description,
@@ -110,14 +198,20 @@ class ResearchAgent(BaseComplianceAgent):
 
             result = await self.safe_llm_call(llm_input)
 
-            # Step 6: Holistic confidence score of document similarity and LLM reasoning quality
+            # Step 6: Calculate confidence based on regulation relevance scores
             confidence_score = self._calculate_overall_confidence(regulations, result)
 
-            # Step 7: Enhance result with RAG insights
+            # Step 7: Ensure proper output schema
+            if not isinstance(result, dict):
+                result = {}
+            
             result["regulations"] = regulations
             result["queries_used"] = expanded_queries
             result["agent"] = "ResearchAgent"
             result["confidence_score"] = confidence_score
+            
+            # Log the final result for debugging
+            self.logger.info(f"Research completed with {len(regulations)} regulations, confidence: {confidence_score}")
 
             self.log_interaction(state, result)
 
@@ -159,14 +253,30 @@ class ResearchAgent(BaseComplianceAgent):
         if not regulations:
             rag_confidence = 0.0
         else:
-            normalized_scores = [reg["relevance_score"] for reg in regulations]
-            rag_confidence = sum(normalized_scores) / len(normalized_scores)
+            # Extract relevance scores and filter out invalid ones
+            relevance_scores = []
+            for reg in regulations:
+                score = reg.get("relevance_score", 0.0)
+                if isinstance(score, (int, float)) and 0 <= score <= 1:
+                    relevance_scores.append(score)
+                else:
+                    self.logger.warning(f"Invalid relevance score: {score}, skipping")
+            
+            if relevance_scores:
+                rag_confidence = sum(relevance_scores) / len(relevance_scores)
+            else:
+                rag_confidence = 0.0
         
         # LLM confidence (if provided)
         llm_confidence = llm_result.get("confidence_score", 0.5)
+        if not isinstance(llm_confidence, (int, float)) or not (0 <= llm_confidence <= 1):
+            llm_confidence = 0.5
         
         # Combine both confidences (weighted average)
-        combined_confidence = (rag_confidence * 0.6) + (llm_confidence * 0.4)
+        combined_confidence = (rag_confidence * 0.7) + (llm_confidence * 0.3)
+        
+        # Log confidence calculation for debugging
+        self.logger.info(f"Confidence calculation: RAG={rag_confidence:.3f}, LLM={llm_confidence:.3f}, Combined={combined_confidence:.3f}")
         
         return round(combined_confidence, 3)
 
@@ -203,18 +313,26 @@ class ResearchAgent(BaseComplianceAgent):
     def _calculate_regulation_confidence(self, distance: float) -> float:
         """Calculate confidence score from document distance"""
         if distance is None:
-            return 50.0  # Neutral confidence for unknown distance
+            return 0.5  # Neutral confidence for unknown distance
         
         try:
-            # Normalize distance to 0-1 range (assuming ChromaDB returns 0-1)
-            # Higher distance = lower confidence
+            # ChromaDB typically returns cosine distances where:
+            # - Lower distance = higher similarity (more relevant)
+            # - Higher distance = lower similarity (less relevant)
+            
+            # For cosine similarity: distance 0.0 = perfect match, distance 1.0 = no similarity
+            # Convert to confidence: 0.0 distance = 1.0 confidence, 1.0 distance = 0.0 confidence
             confidence = max(0.0, 1.0 - distance)
             
             # Apply sigmoid-like transformation for better score distribution
             confidence = confidence ** 0.5  # Square root for better curve
             
-            return round(confidence * 100, 1)  # Return 0-100 range for individual scores
+            # Ensure we don't get 0.0 confidence for very similar documents
+            if confidence < 0.1:
+                confidence = 0.1  # Minimum confidence threshold
+            
+            return round(confidence, 3)  # Return 0.1-1.0 range for individual scores
         except (TypeError, ValueError) as e:
             self.logger.warning(f"Error calculating regulation confidence: {e}, using fallback")
-            return 50.0
+            return 0.5
 

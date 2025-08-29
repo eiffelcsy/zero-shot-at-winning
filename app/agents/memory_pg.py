@@ -151,15 +151,61 @@ class PostgresMemoryStore:
                 applied += 1
         return ApplyResult(applied=applied, namespace=ns)
 
+    # ---------- Terminology ----------
+    def update_terminology(self, terms: List[Dict[str, Any]]) -> ApplyResult:
+        """Store TikTok-specific terminology mappings."""
+        ns = ("memory", "terminology"); applied = 0
+        for term in terms or []:
+            acronym = (term.get("acronym") or "").strip().upper()
+            meaning = (term.get("meaning") or "").strip()
+            if not acronym or not meaning:
+                continue
+            item = {"acronym": acronym, "meaning": meaning, "category": term.get("category", "")}
+            keyh = _hash(item)
+            if self.store.get(ns, keyh) is None:
+                self.store.put(ns, keyh, item, index=False)
+                applied += 1
+        return ApplyResult(applied=applied, namespace=ns)
+
+    def get_terminology_overlay(self) -> str:
+        """Get terminology mapping for prompt overlays."""
+        ns = ("memory", "terminology")
+        terms = self.store.search(ns, query="", limit=100)
+        if not terms:
+            return ""
+        
+        overlay = ["## TIKTOK TERMINOLOGY REFERENCE"]
+        for item in terms:
+            val = getattr(item, "value", item)
+            if isinstance(val, dict):
+                acronym = val.get("acronym", "")
+                meaning = val.get("meaning", "")
+                category = val.get("category", "")
+                if acronym and meaning:
+                    overlay.append(f"- {acronym}: {meaning}")
+                    if category:
+                        overlay.append(f"  Category: {category}")
+        
+        return "\n".join(overlay) if len(overlay) > 1 else ""
+
     # ---------- Overlay rendering ----------
     def render_overlay_for(self, agent: Literal["screening","validation"]) -> str:
         overlay: list[str] = []
+        
+        # Add terminology reference first (most important)
+        terminology = self.get_terminology_overlay()
+        if terminology:
+            overlay.append(terminology)
+        
+        # Add rules
         ns_rules = ("memory", "rules")
         rules = self.store.search(ns_rules, query=agent, limit=200)
-        for item in rules:
-            val = getattr(item, "value", item)
-            if isinstance(val, dict) and val.get("agent") == agent:
-                overlay.append(f"- RULE: {val.get('rule_text')}")
+        if rules:
+            overlay.append("\n## AGENT RULES:")
+            for item in rules:
+                val = getattr(item, "value", item)
+                if isinstance(val, dict) and val.get("agent") == agent:
+                    overlay.append(f"- RULE: {val.get('rule_text')}")
 
         ns_fs = ("fewshots", agent)
         few = self.store.search(ns_fs, query="", limit=2)
