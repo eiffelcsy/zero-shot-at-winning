@@ -117,12 +117,12 @@ class ComplianceOrchestrator:
             if validation_analysis:
                 needs_geo_logic = validation_analysis.get("needs_geo_logic", "UNKNOWN")
                 reasoning = validation_analysis.get("reasoning", "")
-                confidence = validation_analysis.get("confidence", 0.0)
+                confidence_score = validation_analysis.get("confidence_score", 0.0)
                 related_regulations = validation_analysis.get("related_regulations", [])
             else:
                 needs_geo_logic = screening_analysis.get("compliance_required", "UNKNOWN")
                 reasoning = screening_analysis.get("reasoning", "")
-                confidence = screening_analysis.get("confidence", 0.0)
+                confidence_score = screening_analysis.get("confidence_score", 0.0)
                 related_regulations = []
             
             # Extract jurisdictions from research results
@@ -140,7 +140,7 @@ class ComplianceOrchestrator:
                 "needs_geo_logic": needs_geo_logic,
                 "reasoning": reasoning,
                 "related_regulations": related_regulations,
-                "confidence_score": confidence,
+                "confidence_score": confidence_score,
                 "risk_level": screening_analysis.get("risk_level", "UNKNOWN"),
                 "workflow_completed": final_state.get("workflow_completed", False),
                 "agents_completed": agents_completed,

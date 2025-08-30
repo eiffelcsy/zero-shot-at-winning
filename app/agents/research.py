@@ -273,7 +273,7 @@ class ResearchAgent(BaseComplianceAgent):
         """Extract and format regulations from retrieved documents with TikTok terminology context"""
         regulations = []
         
-        for i, result in enumerate(raw_results):
+        for result in raw_results:
             try:
                 # Extract document content and metadata
                 content = result.get("document", "")  # Changed from "content" to "document"
@@ -281,12 +281,10 @@ class ResearchAgent(BaseComplianceAgent):
                 
                 # Basic regulation extraction
                 regulation = {
-                    "id": f"reg_{i+1}",
                     "content": content[:500] + "..." if len(content) > 500 else content,  # Truncate for readability
                     "metadata": metadata,
-                    "relevance_score": 1.0 - (result.get("distance", 0.0) if result.get("distance") is not None else 0.0),  # Convert distance to relevance score
+                    "relevance_score": 1 / (1 + result.get("distance", 0.0)),  # Convert distance to relevance score
                     "source": metadata.get("source_filename", "unknown"),  # Changed from "source" to "source_filename"
-                    "page": metadata.get("page", "unknown")
                 }
                 
                 # Check if content contains TikTok terminology (if memory overlay is available)
@@ -296,12 +294,12 @@ class ResearchAgent(BaseComplianceAgent):
                     if found_terms:
                         regulation["tiktok_terminology_found"] = found_terms
                         regulation["relevance_score"] = min(regulation["relevance_score"] * 1.2, 1.0)  # Boost relevance for TikTok-specific content
-                        self.logger.info(f"Regulation {i+1} contains TikTok terminology: {found_terms}")
+                        self.logger.info(f"Content contains TikTok terminology: {found_terms}")
                 
                 regulations.append(regulation)
                 
             except Exception as e:
-                self.logger.warning(f"Failed to extract regulation {i+1}: {e}")
+                self.logger.warning(f"Failed to extract content: {e}")
                 continue
         
         # Sort by relevance score
