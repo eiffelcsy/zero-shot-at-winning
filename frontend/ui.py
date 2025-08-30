@@ -85,14 +85,13 @@ def check_compliance(feature_title: str, feature_description: str, feature_docum
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-def submit_feedback(analysis_id: str, feedback_type: str, feedback_text: str = None, correction_data: dict = None):
+def submit_feedback(analysis_id: str, feedback_type: str, feedback_text: str = None):
     """Submit feedback for a compliance analysis"""
     try:
         payload = {
             "analysis_id": analysis_id,
             "feedback_type": feedback_type,  # 'positive', 'negative', 'needs_context'
             "feedback_text": feedback_text,
-            "correction_data": correction_data,
             "timestamp": datetime.now().isoformat()
         }
         
