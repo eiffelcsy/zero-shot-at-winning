@@ -29,7 +29,7 @@ This API provides endpoints for automated geo-regulation compliance analysis usi
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| title | string | Yes | Feature name/title (1-200 characters) |
+| title | string | Yes | Feature name (1-200 characters) |
 | description | string | Yes | Detailed feature description (1-5000 characters) |
 | document | file | No | Optional feature document (PDF, TXT, DOCX, MD) |
 
@@ -43,76 +43,37 @@ curl -X POST "http://localhost:8000/api/v1/compliance/check" \
 **Response Schema:**
 ```bash
 {
+  "status": "string",
+  "message": "string",
   "analysis_id": "string",
-  "flag": "string", 
-  "confidence_score": 0.92,
-  "risk_level": "string",
-  "reasoning": "string",
-  "related_regulations": ["string"],
-  "agent_details": {
-    "screening_agent_status": "completed",
-    "research_agent_status": "completed",
-    "validation_agent_status": "completed",
-    "document_processed": true,
-    "document_metadata": {
-      "filename": "string",
-      "size": 0,
-      "content_type": "string"
-    }
-  },
-  "timestamp": "2025-01-15T14:30:22.123Z"
+  "timestamp": "2025-08-31T12:34:56Z",
+  "screening_result": { ... },
+  "research_result": { ... },
+  "validation_result": { ... },
+  "agents_completed": [ "string" ],
+  "workflow_status": "string",
+  "confidence_score": "float",
+  "error": "string"
 }
 ```
 
 **Success Response Examples:**
-- Feature Requires Compliance
 ```bash
 {
-  "analysis_id": "analysis_20250115_143022_1",
-  "flag": "yes",
+  "status": "success",
+  "message": "Compliance check completed",
+  "analysis_id": "123e4567-e89b-12d3-a456-426614174000",
+  "timestamp": "2025-08-31T12:34:56Z",
+  "screening_result": { ... },
+  "research_result": { ... },
+  "validation_result": { ... },
+  "agents_completed": ["ScreeningAgent", "ResearchAgent", "ValidationAgent"],
+  "workflow_status": "completed",
   "confidence_score": 0.92,
-  "risk_level": "High",
-  "reasoning": "This feature requires geo-specific compliance logic because it reads user location data to enforce region-specific copyright restrictions. The blocking of downloads based on geographic location directly relates to Utah's specific age verification requirements.",
-  "related_regulations": [
-    "EU Digital Service Act (DSA) - Article 14",
-    "Utah Social Media Regulation Act",
-    "GDPR - Location data processing requirements"
-  ],
-  "agent_details": {
-    "screening_agent_status": "completed",
-    "research_agent_status": "completed",
-    "validation_agent_status": "completed",
-    "document_processed": true,
-    "document_metadata": {
-      "filename": "feature_spec.pdf",
-      "size": 245760,
-      "content_type": "application/pdf"
-    }
-  },
-  "timestamp": "2025-01-15T14:30:22.123Z"
+  "error": null
 }
 ```
-- Feature Does Not Require Compliance
-```bash
-{
-  "analysis_id": "analysis_20250115_143045_2",
-  "flag": "no",
-  "confidence_score": 0.78,
-  "risk_level": "Low",
-  "reasoning": "This feature does not require geo-specific compliance logic because it operates uniformly across regions without location dependencies or region-specific data processing requirements.",
-  "related_regulations": [
-    "General platform terms of service",
-    "Standard content policies"
-  ],
-  "agent_details": {
-    "screening_agent_status": "completed",
-    "research_agent_status": "completed",
-    "validation_agent_status": "completed",
-    "document_processed": false
-  },
-  "timestamp": "2025-01-15T14:30:45.456Z"
-}
-```
+
 **Error Responses:**
 - 400 Bad Request
 ```bash
@@ -120,7 +81,7 @@ curl -X POST "http://localhost:8000/api/v1/compliance/check" \
 ```
 - 500 Internal Server Error
 ```bash
-{"detail": "Compliance analysis failed: Agent orchestration error"}
+{"detail": "Compliance analysis failed: {specific error message}"}
 ```
 
 ### 2. Submit Feedback
@@ -136,12 +97,14 @@ curl -X POST "http://localhost:8000/api/v1/compliance/check" \
   "analysis_id": "string",
   "feedback_type": "string",
   "feedback_text": "string",
-  "correction_data": {
-    "correct_flag": "string",
-    "correct_risk_level": "string",
-    "original_result": {}
-  },
   "timestamp": "2025-01-15T14:35:00.000Z"
+  "state": {
+      "feature_name": "string",
+      "feature_description": "string",
+      "screening_analysis": "string",
+      "research_analysis": "string",
+      "validation_analysis": "string"
+      }
 }
 ```
 
@@ -152,42 +115,29 @@ curl -X POST "http://localhost:8000/api/v1/compliance/check" \
   "analysis_id": "analysis_20250115_143022_1",
   "feedback_type": "positive",
   "timestamp": "2025-01-15T14:35:00.000Z"
+  "state": {
+      "feature_name": "string",
+      "feature_description": "string",
+      "screening_analysis": "string",
+      "research_analysis": "string",
+      "validation_analysis": "string"
+      }
 }
 ```
-- Negative Feedback with Correction
+- Negative Feedback with Reasoning
 ```bash
 {
   "analysis_id": "analysis_20250115_143022_1",
   "feedback_type": "negative",
   "feedback_text": "This feature should NOT require geo-compliance because it doesn't process location data or implement region-specific restrictions.",
-  "correction_data": {
-    "correct_flag": "no",
-    "correct_risk_level": "Low",
-    "original_result": {
-      "flag": "yes",
-      "risk_level": "High"
-    }
-  },
-  "timestamp": "2025-01-15T14:35:00.000Z"
-}
-```
-- Context Improvement Request
-```bash
-{
-  "analysis_id": "analysis_20250115_143022_1",
-  "feedback_type": "needs_context",
-  "feedback_text": "Analysis should consider specific industry regulations and cross-border data transfer requirements.",
-  "timestamp": "2025-01-15T14:35:00.000Z"
-}
-```
-- Success Response:
-```bash
-{
-  "feedback_id": "feedback_uuid_12345",
-  "status": "processed",
-  "message": "Feedback received and will be used to improve analysis quality. Type: negative",
-  "analysis_id": "analysis_20250115_143022_1",
-  "timestamp": "2025-01-15T14:35:22.123Z"
+  "timestamp": "2025-01-15T14:35:00.000Z",
+  "state": {
+            "feature_name": "string",
+            "feature_description": "string",
+            "screening_analysis": "string",
+            "research_analysis": "string",
+            "validation_analysis": "string"
+            }
 }
 ```
 
@@ -234,6 +184,12 @@ curl -X POST "http://localhost:8000/api/v1/upload-pdfs" \
   "failed": 0
 }
 ```
+**Error Response Example:**
+```bash
+{
+    "detail": "No files provided"
+}
+```
 
 ### 4. Clear Document Collection
 **Endpoint:** `DELETE /clear-documents`
@@ -243,10 +199,15 @@ curl -X POST "http://localhost:8000/api/v1/upload-pdfs" \
 **Success Response:**
 ```bash
 {
-  "status": "success",
-  "message": "Successfully cleared all documents from collection",
-  "documents_deleted": 156,
-  "chunks_deleted": 8934,
-  "timestamp": "2024-08-28T10:30:00Z"
+  "status": "success",       
+  "message": "All documents cleared successfully",  
+  "deleted_count": 42
+}
+```
+
+**Error Response:**
+```bash
+{
+    "detail": "Error clearing document collection: {specific error message}"
 }
 ```
