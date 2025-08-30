@@ -37,21 +37,18 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 git clone https://github.com/yourusername/zero-shot-at-winning.git
 cd zero-shot-at-winning
 ```
-2. Environment Setup
+2. Environment Setup:
+
 Copy .env.example into .env and configure API keys:
 ```bash
 cp .env.example .env
 ```
-3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-4. Build and run with Docker Compose:
+3. Build and run with Docker Compose:
 ```bash
 docker compose build
 docker compose up
 ```
-5. Run Frontend UI in another terminal:
+4. Run Frontend UI in another terminal:
 ```bash
 streamlit run frontend/ui.py
 ```
