@@ -65,9 +65,8 @@ class CorrectionData(BaseModel):
 
 class FeedbackRequest(BaseModel):
     analysis_id: str
-    feedback_type: Literal["positive", "negative", "needs_context"]
+    feedback_type: Literal["positive", "negative"]
     feedback_text: Optional[str] = ""
-    correction_data: Optional[CorrectionData] = None
     timestamp: Optional[str] = None
     state: Dict[str, Any]  # Full current state object from the client
 
@@ -946,26 +945,9 @@ def to_learning_user_feedback(req: FeedbackRequest) -> Dict[str, Any]:
       - is_correct: 'yes' if correction_data.correct_flag != original_result.flag, else 'no'
       - notes: exactly feedback_text
     """
-    def norm_flag(v: Optional[str]) -> Optional[str]:
-        if not v:
-            return None
-        s = str(v).strip().lower()
-        if s in {"yes", "true", "y", "1"}:
-            return "yes"
-        if s in {"no", "false", "n", "0"}:
-            return "no"
-        return None
 
-
-    cf, of = None, None
-    if getattr(req, "correction_data", None):
-        cf = norm_flag(getattr(req.correction_data, "correct_flag", None))
-        orig = getattr(req.correction_data, "original_result", None)
-        if orig:
-            of = norm_flag(getattr(orig, "flag", None))
-
-
-    is_correct = "yes" if (cf is not None and of is not None and cf != of) else "no"
+    feedback_type = (req.feedback_type or "").strip()
+    is_correct = "yes" if (feedback_type == "positive") else "no"
     return {
         "is_correct": is_correct,
         "notes": (req.feedback_text or "").strip()
