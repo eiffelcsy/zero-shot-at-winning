@@ -237,29 +237,54 @@ if page == "Compliance Checker":
         st.success(f"{feature_document.name} uploaded ({feature_document.size:,} bytes)")
     
     # Analysis button
-    analyze_button = st.button("Analyze Compliance", use_container_width=True, type="primary")
-    
-    # Results section
+    analyze_button = st.button(
+        "Analyze Compliance",
+        use_container_width=True,
+        type="primary"
+    )
+
+    # Results section with error handling
     if analyze_button:
+        # Input validation
+        validation_errors = []
+        
+        # Feature Name and Description validation
         if not title or not description:
-            st.markdown("""
-                <div class="warning-badge">
-                    Please fill in both Feature Name and Description before analyzing
-                </div>
-            """, unsafe_allow_html=True)
+            validation_errors.append("Feature Name and Description are required")
+        
+        # Document validation if provided
+        if feature_document:
+            file_size = feature_document.size
+            file_type = feature_document.type
+            allowed_types = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown"]
+            max_size = 10 * 1024 * 1024  # 10MB
+
+            if file_type not in allowed_types:
+                validation_errors.append("Invalid document type. Please upload PDF, TXT, DOCX, or MD files only")
+            if file_size > max_size:
+                validation_errors.append("Document size should not exceed 10MB")
+
+        # Display validation errors if any
+        if validation_errors:
+            for error in validation_errors:
+                st.error(error)
         else:
+            # Proceed with analysis
             with st.spinner("Analyzing feature compliance with LLM agents..."):
                 try:
                     # Call the enhanced compliance check with optional document
                     result = check_compliance(title, description, feature_document)
-                    # Store the result in session state
-                    st.session_state.current_analysis_result = result
+                    
+                    if result.get("status_code") == 400:
+                        st.error(result["error"])
+                    elif result.get("error"):
+                        st.error(f"Error during analysis: {result['error']}")
+                    else:
+                        # Store the result in session state
+                        st.session_state.current_analysis_result = result
+                        
                 except Exception as e:
-                    st.markdown(f"""
-                        <div class="warning-badge">
-                            Error during analysis: {str(e)}
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.error(f"Error during analysis: {str(e)}")
 
     # Display results section if we have results in session state
     if st.session_state.current_analysis_result:
