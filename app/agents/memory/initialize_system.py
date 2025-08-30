@@ -10,8 +10,10 @@ import sys
 # Add the app directory to Python path for direct execution
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents.memory_pg import PostgresMemoryStore
-from agents.prompts.templates import build_screening_prompt, build_research_prompt, build_validation_prompt
+from memory_pg import PostgresMemoryStore
+from agents.prompts.screening_prompt import build_screening_prompt
+from agents.prompts.research_prompt import build_research_prompt
+from agents.prompts.validation_prompt import build_validation_prompt
 
 def initialize_tiktok_system():
     """Initialize the complete TikTok compliance system with proper memory overlays."""

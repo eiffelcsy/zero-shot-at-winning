@@ -14,6 +14,19 @@ services:
       - rag-network
     restart: unless-stopped
 
+  # Postgres Database
+  db:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    volumes:
+      - ./app/data:/var/lib/postgresql/data
+    networks:
+      - rag-network
+    restart: unless-stopped
+
   # Streamlit Frontend Application
   frontend:
     build:
