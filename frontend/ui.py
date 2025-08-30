@@ -147,6 +147,8 @@ if 'feedback_required' not in st.session_state:
     st.session_state.feedback_required = False
 if 'current_analysis_result' not in st.session_state:
     st.session_state.current_analysis_result = None
+if 'scroll_to_top' not in st.session_state:
+    st.session_state.scroll_to_top = False
 
 # --- Enhanced Sidebar Navigation ---
 with st.sidebar:
@@ -198,6 +200,16 @@ if page == "Compliance Checker":
             <h1>Compliance Checker</h1>
         </div>
     """, unsafe_allow_html=True)
+    
+    # Add an anchor for scrolling
+    if st.session_state.scroll_to_top:
+        st.markdown("""
+            <div id="top"></div>
+            <script>
+                window.location.hash = '#top';
+            </script>
+        """, unsafe_allow_html=True)
+        st.session_state.scroll_to_top = False
     
     # Input section
     st.markdown("### Feature Analysis Input")
@@ -316,7 +328,6 @@ if page == "Compliance Checker":
             with meta_cols[3]:
                 st.metric("Timestamp", metadata.get("timestamp", "Unknown"))
 
-        # Action buttons
         # Export options
         export_format = st.selectbox(
             "Export Format",
@@ -331,84 +342,82 @@ if page == "Compliance Checker":
         )
 
         if st.button("Analyze Another Feature", use_container_width=True):
+            st.session_state.current_analysis_result = None
+            st.session_state.scroll_to_top = True
             st.rerun()
-    
+
         # Feedback Section
         st.markdown("---")
         st.markdown("### Analysis Feedback")
         
-        feedback_col1, feedback_col2 = st.columns(2)
-        
-        with feedback_col1:
-            feedback_type = st.radio(
-                "Was this analysis helpful?",
-                ["Good Response", "Needs Improvement"],
-                key="feedback_type"
-            )
+        feedback_type = st.radio(
+            "Was this analysis helpful?",
+            ["Good Response", "Needs Improvement"]
+        )
         
         if feedback_type == "Good Response":
-            with st.expander("Submit Positive Feedback", expanded=True):
-                st.markdown("""
-                    Thank you for confirming the analysis quality! 
-                    This helps improve our system's confidence metrics.
-                """)
-                if st.button("Confirm Good Response", type="primary", key="submit_good_feedback"):
-                    feedback_response = submit_feedback(
-                        analysis_id=result["analysis_id"],
-                        feedback_type="positive"
+            if st.button("Confirm Good Response", type="primary"):
+                feedback_payload = {
+                    "analysis_id": result["analysis_id"],
+                    "feedback_type": "positive",
+                    "feedback_text": "",
+                    "timestamp": datetime.now().isoformat(),
+                    "state": {
+                        "feature_name": title,
+                        "feature_description": description,
+                        "screening_analysis": result.get("screening_result"),
+                        "research_analysis": result.get("research_result"),
+                        "validation_analysis": result.get("validation_result")
+                    }
+                }
+                
+                try:
+                    response = requests.post(
+                        f"{API_URL}/feedback",
+                        json=feedback_payload,
+                        timeout=120
                     )
-                    if feedback_response.get("error"):
-                        st.error(f"Error submitting feedback: {feedback_response['error']}")
-                    else:
-                        st.success("Thank you for your feedback!")
+                    response.raise_for_status()
+                    st.success("Thank you for your feedback!")
+                except Exception as e:
+                    st.error(f"Error submitting feedback: {str(e)}")
         
         else:  # Needs Improvement
-            with st.expander("Submit Improvement Feedback", expanded=True):
-                improvement_reason = st.selectbox(
-                    "What needs improvement?",
-                    [
-                        "Incorrect compliance flag",
-                        "Missing relevant regulations",
-                        "Reasoning needs clarification",
-                        "Wrong confidence score",
-                        "Other issues"
-                    ]
-                )
-                
-                feedback_text = st.text_area(
-                    "Please provide more details",
-                    placeholder="Help us understand what was incorrect or missing...",
-                    height=100
-                )
-                
-                # Corrective inputs based on improvement reason
-                correction_data = {}
-                if improvement_reason == "Incorrect compliance flag":
-                    correction_data["correct_flag"] = st.radio(
-                        "Correct compliance requirement:",
-                        ["Requires Geo-Logic", "Does Not Require Geo-Logic"]
-                    )
-                elif improvement_reason == "Missing relevant regulations":
-                    correction_data["missing_regulations"] = st.text_area(
-                        "List relevant regulations",
-                        placeholder="Enter each regulation on a new line"
-                    )
-                
-                if st.button("Submit Feedback", type="primary", key="submit_bad_feedback"):
-                    if not feedback_text:
-                        st.warning("Please provide detailed feedback before submitting")
-                    else:
-                        feedback_response = submit_feedback(
-                            analysis_id=result["analysis_id"],
-                            feedback_type="negative",
-                            feedback_text=feedback_text,
-                            correction_data=correction_data
+            feedback_text = st.text_area(
+                "Please explain what needs improvement",
+                placeholder="Help us understand what was incorrect or missing...",
+                height=100
+            )
+            
+            if st.button("Submit Feedback", type="primary"):
+                if not feedback_text:
+                    st.warning("Please provide feedback before submitting")
+                else:
+                    feedback_payload = {
+                        "analysis_id": result["analysis_id"],
+                        "feedback_type": "negative",
+                        "feedback_text": feedback_text,
+                        "timestamp": datetime.now().isoformat(),
+                        "state": {
+                            "feature_name": title,
+                            "feature_description": description,
+                            "screening_analysis": result.get("screening_result"),
+                            "research_analysis": result.get("research_result"),
+                            "validation_analysis": result.get("validation_result")
+                        }
+                    }
+                    
+                    try:
+                        response = requests.post(
+                            f"{API_URL}/feedback",
+                            json=feedback_payload,
+                            timeout=120
                         )
-                        if feedback_response.get("error"):
-                            st.error(f"Error submitting feedback: {feedback_response['error']}")
-                        else:
-                            st.success("Thank you for your detailed feedback! We'll use this to improve our system.")      
-
+                        response.raise_for_status()
+                        st.success("Thank you for your feedback!")
+                    except Exception as e:
+                        st.error(f"Error submitting feedback: {str(e)}")
+        
 # ================================================
 # Page 2: Upload Regulations (unchanged)
 # ================================================
