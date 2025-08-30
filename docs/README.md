@@ -12,8 +12,8 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 
 **Outputs:**
 - Flag for geo-specific compliance requirement
-- Human-readable reasoning
-- Related regulations (optional)
+- Clear reasoning
+- Related regulations
 
 ## Key Features
 - **Automated Screening** – Detects whether a feature requires region-specific compliance logic.
