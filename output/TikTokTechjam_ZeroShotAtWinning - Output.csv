@@ -1,0 +1,360 @@
+feature_name,feature_description,needs_geo_logic,reasoning,related_regulations
+Curfew login blocker with ASL and GH for Utah minors,"To comply with the Utah Social Media Regulation Act, we are implementing a curfew-based login restriction for users under 18. The system uses ASL to detect minor accounts and routes enforcement through GH to apply only within Utah boundaries. The feature activates during restricted night hours and logs activity using EchoTrace for auditability. This allows parental control to be enacted without user-facing alerts, operating in ShadowMode during initial rollout.",YES,"The feature requires geo-compliance logic due to its explicit implementation of location-based restrictions for minors under the Utah Social Media Regulation Act. The feature description indicates that it is designed to comply with specific state regulations, which necessitate compliance measures for minors, particularly in Utah. The use of ASL (Age-sensitive logic) to detect minor accounts and the routing through GH (Geo-handler) to enforce these restrictions specifically within Utah boundaries further emphasizes the legal compliance intent. Additionally, the feature's operation during restricted night hours aligns with the requirements outlined in the Utah Social Media Regulation Act, which mandates denying access to minor accounts during specified hours.","[
+      {
+        ""regulation_name"": ""Utah Social Media Regulation Act"",
+        ""excerpt"": ""Deny access to a minor's account from 10:30pm to 6:30am, subject to parental discretion."",
+        ""relevance_score"": 0.9,
+        ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""
+      },
+      {
+        ""regulation_name"": ""Utah Social Media Regulation Act"",
+        ""excerpt"": ""Obtain express parental consent for a minor to open or hold an account."",
+        ""relevance_score"": 0.85,
+        ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""
+      }
+]"
+PF default toggle with NR enforcement for California teens,"As part of compliance with California’s SB976, the app will disable PF by default for users under 18 located in California. This default setting is considered NR to override, unless explicit parental opt-in is provided. Geo-detection is handled via GH, and rollout is monitored with FR logs. The design ensures minimal disruption while meeting the strict personalization requirements imposed by the law.",YES,"The feature requires geo-compliance logic due to California's SB976, which mandates that the Personalized Feed (PF) be disabled by default for users under 18 in California. The feature description explicitly states that this setting is considered Not Recommended (NR) to override unless explicit parental opt-in is provided, indicating a clear compliance requirement tied to geographic location. The geo-detection is handled via the Geo-handler (GH), ensuring that the feature adheres to California's specific legal requirements.
+","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""An operator of an addictive internet-based service or application shall publicly disclose, on an annual basis, the number of minor users of its addictive internet-based service or application, and of that total the number for whom the operator has received verifiable parental consent to provide an addictive feed."",
+        ""relevance_score"": 0.571,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The bill would require the Attorney General to adopt regulations to further the purposes of these provisions, including regulations regarding age assurance and parental consent by January 1, 2027."",
+        ""relevance_score"": 0.611,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+]"
+Child abuse content scanner using T5 and CDS triggers,"In line with the US federal law requiring providers to report child sexual abuse content to NCMEC, this feature scans uploads and flags suspected materials tagged as T5. Once flagged, the CDS auto-generates reports and routes them via secure channel APIs. The logic runs in real-time, supports human validation, and logs detection metadata for internal audits. Regional thresholds are governed by LCP parameters in the backend.",YES,"The feature requires geo-compliance logic due to the explicit mention of compliance with US federal law regarding the reporting of child sexual abuse content to NCMEC. This indicates a legal obligation that varies by jurisdiction, necessitating the application of local compliance policies (LCP) to ensure adherence to regional regulations.","[
+      {
+        ""regulation_name"": ""Reporting requirements of providers"",
+        ""excerpt"": ""In order to reduce the proliferation of online child sexual exploitation and to prevent the online sexual exploitation of children, a provider shall... take the actions described in subparagraph (B); and"",
+        ""relevance_score"": 0.98557675,
+        ""source_filename"": ""18 U.S. Code \u00a7 2258A - Reporting requirements of providers _ U.S. Code _ US Law _ LII _ Legal Information Institute.pdf""
+      }
+]"
+Content visibility lock with NSP for EU DSA,"To meet the transparency expectations of the EU Digital Services Act, we are introducing a visibility lock for flagged user-generated content labeled under NSP. When such content is detected, a soft Softblock is applied and GH ensures enforcement is restricted to the EU region only. EchoTrace supports traceability, and Redline status can be triggered for legal review. This feature enhances accountability and complies with Article 16’s removal mechanisms.",YES,"The feature implements a visibility lock for flagged user-generated content under the Non-Shareable Policy (NSP) specifically for the EU region, indicating a clear need for geographic compliance logic. The screening analysis correctly identifies the feature's intent to comply with the EU Digital Services Act (DSA) by enforcing content moderation and transparency requirements. The use of geo-handler (GH) for enforcement restricted to the EU region further supports this necessity.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""monitoring societal concerns through voluntary efforts, including through commitments and procedures agreed under codes of conduct or crisis protocols."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""(b) complies with conditions on access to the information; (c) complies with rules regarding the updating of the information."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+]"
+Jellybean-based parental notifications for Florida regulation,"To support Florida's Online Protections for Minors law, this feature extends the Jellybean parental control framework. Notifications are dispatched to verified parent accounts when a minor attempts to access restricted features. Using IMT, the system checks behavioral anomalies against BB models. If violations are detected, restrictions are applied in ShadowMode with full audit logging through CDS. Glow flags ensure compliance visibility during rollout phases.",YES,"The feature explicitly supports Florida's Online Protections for Minors law, indicating a clear need for geo-compliance logic. The Jellybean parental control framework is designed to ensure that parental notifications are sent when minors attempt to access restricted features, which aligns with the regulatory requirements for protecting minors in Florida. The use of IMT to check behavioral anomalies against BB models and the application of restrictions in ShadowMode further emphasize the proactive compliance measures in place. The Glow flags for compliance visibility during rollout phases also highlight the importance of maintaining compliance throughout the feature's deployment.","[
+      {
+        ""regulation_name"": ""Online Protections for Minors"",
+        ""excerpt"": ""A commercial entity that knowingly and intentionally publishes or distributes material harmful to minors on a website or application that contains a substantial portion of such material must use certain verification methods and prevent access to such material by minors."",
+        ""relevance_score"": 1.0,
+        ""source_filename"": ""_h0003er.pdf""
+      }
+]"
+Unified retention control via DRT & CDS,"Introduce a data retention feature using DRT thresholds, ensuring automatic log deletion across all regions. CDS will continuously audit retention violations, triggering EchoTrace as necessary. Spanner logic ensures all platform modules comply uniformly.",REVIEW,"The feature introduces a data retention mechanism using DRT thresholds and involves continuous auditing via CDS, which indicates a structured approach to compliance. However, the screening analysis lacks specific references to applicable regulations, necessitating further research to clarify compliance obligations across different jurisdictions. The automatic log deletion and monitoring processes suggest a proactive compliance strategy, but without explicit regulatory context, the need for geo-compliance logic remains uncertain.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of very large online platforms or of very large online search engines shall establish a compliance function, which is independent from their operational functions and composed of one or more compliance officers."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""An operator of an addictive internet-based service or application shall publicly disclose, on an annual basis, the number of minor users of its addictive internet-based service or application."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+NSP auto-flagging,"This feature will automatically detect and tag content that violates NSP policy. Once flagged, Softblock is applied and a Redline alert is generated if downstream sharing is attempted.",REVIEW,"The feature 'NSP auto-flagging' raises significant compliance considerations due to its automatic detection and tagging of content that violates the Non-shareable policy (NSP). The application of 'Softblock' indicates silent limitations on user accounts, which could impact user rights and transparency. The generation of a 'Redline' alert suggests a mechanism for legal review, indicating serious compliance implications. However, the geographic scope is currently identified as global, and further research is needed to determine if specific jurisdictions have differing requirements regarding NSP enforcement and user restrictions.","[  
+    {   
+        ""regulation_name"": ""Digital Services Act"",  
+        ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."",  
+        ""relevance_score"": 0.9,  
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""  
+     }  
+]"
+T5 tagging for sensitive reports,"When users report content containing high-risk information, it is tagged as T5 for internal routing. CDS then enforces escalation. The system is universal and does not rely on regional toggles or GH routes.",YES,"The feature involves T5 tagging for sensitive reports, which indicates handling of high-risk information. Given that T5 is the highest sensitivity level for data, compliance with various international data protection regulations is necessary. The screening analysis correctly identified the need for compliance due to the feature's universal application without regional toggles, raising concerns about adherence to regulations like GDPR and CCPA. The research confirms that specific regulations, such as the Digital Services Act and the Protecting Our Kids from Social Media Addiction Act, impose requirements that necessitate geographic compliance logic, particularly regarding the protection of minors and data handling.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors."",
+        ""relevance_score"": 0.186,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Underage protection via Snowcap trigger,"Snowcap is activated for all underage users platform-wide, applying ASL to segment accounts. Actions taken under this logic are routed to CDS and monitored using BB to identify deviations in usage.",REVIEW,"The feature 'Underage protection via Snowcap trigger' activates the Snowcap policy for all underage users, which is crucial for compliance with regulations concerning minors. However, while the screening analysis indicates a high compliance risk, the research documents retrieved do not provide a clear consensus on whether specific geographic compliance logic is required. The regulations identified, such as the Utah Social Media Regulation Act and the Digital Services Act, suggest varying requirements for age verification and parental consent, but the feature description does not specify if these requirements differ by jurisdiction. Therefore, further investigation is needed to clarify whether geographic compliance logic is necessary based on the specific jurisdictions involved.","[
+      {
+        ""regulation_name"": ""Utah Social Media Regulation Act"",
+        ""excerpt"": ""SB 152 requires social media platforms to: Verify the age of a new user at account creation, or for an existing account within 14 days of account access."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""
+      },
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+Universal PF deactivation on guest mode,"By default, PF will be turned off for all uses browsing in guest mode.",REVIEW,"The feature description indicates that the Personalized Feed (PF) will be turned off by default for users browsing in guest mode, which raises compliance considerations regarding user data handling and privacy. The screening analysis correctly identifies the need for further research due to the lack of explicit mention of compliance with specific regulations. However, the geographic scope is marked as 'unknown,' which complicates the determination of whether geo-compliance logic is necessary. The research retrieved relevant documents, particularly from the Digital Services Act and the Protecting Our Kids from Social Media Addiction Act, which address online privacy and protections for minors. Given the potential implications for user data handling, further investigation is warranted to clarify the legal obligations associated with this feature across different jurisdictions.","[  
+    {  
+         ""regulation_name"": ""Digital Services Act"",  
+         ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."", 
+         ""relevance_score"": 0.1,  
+         ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""  },  
+    {  
+         ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",  
+         ""excerpt"": ""The bill would require the Attorney General to adopt regulations to further the purposes of these provisions, including regulations regarding age assurance and parental consent by January 1, 2027."",  
+         ""relevance_score"": 0.1, 
+         ""source_filename"": ""20230SB976_91.pdf""  
+    }  
+]"
+Story resharing with content expiry,"Enable users to reshare stories from others, with auto-expiry after 48 hours. This feature logs resharing attempts with EchoTrace and stores activity under BB.",REVIEW,"The feature 'Story resharing with content expiry' raises potential compliance concerns regarding user data handling and content sharing, particularly in regions with strict data privacy laws. The feature includes an auto-expiry mechanism after 48 hours, which may help mitigate some data retention issues. However, the logging of resharing attempts with EchoTrace indicates a monitoring mechanism that could be subject to compliance scrutiny. The screening analysis flagged the need for further research, which is appropriate given the complexity of compliance requirements across different jurisdictions. The research retrieved relevant documents, but their relevance scores indicate that they do not directly address the specific compliance implications of the feature. Therefore, further investigation is necessary to determine if geographic compliance logic is required.","[ 
+    {
+       ""regulation_name"": ""Digital Services Act"",  
+        ""excerpt"": ""Providers of online platforms allowing consumers to conclude distance contracts with traders shall store the information obtained pursuant to paragraphs 1 and 2 in a secure manner for a period of six months after the end of the contractual relationship with the trader concerned. They shall subsequently delete the information."",  
+        ""relevance_score"": 0.1,  
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""  
+     }  
+]"
+Leaderboard system for weekly creators,Introduce a creator leaderboard updated weekly using internal analytics. Points and rankings are stored in FR metadata and tracked using IMT.,REVIEW,"The feature description indicates the implementation of a creator leaderboard that utilizes internal analytics to track points and rankings. The use of 'IMT' (Internal Monitoring Trigger) suggests that there is a mechanism in place for monitoring user interactions and data processing, which raises compliance considerations regarding data privacy and user rights. However, the geographic scope is currently unknown, and the compliance implications may vary based on jurisdiction. Therefore, further research is needed to determine if specific geographic compliance logic is required.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of very large online platforms or of very large online search engines shall establish a compliance function, which is independent from their operational functions and composed of one or more compliance officers, including the head of the compliance function."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+Mood-based PF enhancements,Adjust PF recommendations based on inferred mood signals from emoji usage. This logic is soft-tuned using BB and undergoes quiet testing in ShadowMode.,REVIEW,"The feature 'Mood-based PF enhancements' adjusts personalized feed (PF) recommendations based on inferred mood signals from emoji usage, which raises potential compliance concerns regarding user data processing and privacy, particularly for minors. The screening analysis correctly identifies the need for compliance with local data protection laws, but the geographic scope is currently unknown, necessitating further investigation into jurisdiction-specific regulations. The research highlights relevant regulations, particularly those concerning age verification and parental consent, which are critical for compliance with features targeting minors.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.184,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."",
+        ""relevance_score"": 0.191,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+New user rewards via NR profile suggestions,"At onboarding, users will receive NR-curated profiles to follow for faster network building. A/B testing will use Spanner.",REVIEW,"The feature involves NR-curated profiles for new users, which suggests a personalized recommendation system that may raise compliance concerns regarding user data handling. The screening analysis flagged the need for further research due to potential compliance implications, particularly in regions with strict data privacy laws. However, the geographic scope is currently unknown, making it unclear whether specific geo-compliance logic is necessary. Further investigation is required to determine if different jurisdictions impose varying requirements on the feature's implementation.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of very large online platforms or of very large online search engines shall provide recipients of services with a concise, easily-accessible and machine-readable summary of the terms and conditions, including the available remedies and redress mechanisms, in clear and unambiguous language."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+Creator fund payout tracking in CDS,Monetization events will be tracked through CDS to detect anomalies in creator payouts. DRT rules apply for log trimming.,REVIEW,"The feature 'Creator fund payout tracking in CDS' involves the Compliance Detection System (CDS) for monitoring monetization events, which indicates a compliance requirement. However, the geographic scope is currently unknown, and further research is needed to determine if specific regulations vary by jurisdiction. The Data Retention Threshold (DRT) rules apply for log trimming, which is crucial for compliance with data protection laws. The combination of these factors suggests that while compliance obligations exist, the necessity for geographic compliance logic is uncertain without additional information.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Digital Services Coordinators shall notify to the Commission the out-of-court dispute settlement bodies that they have certified in accordance with paragraph 3."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of online platforms allowing consumers to conclude distance contracts with traders shall make best efforts to assess whether such traders have provided the information referred to in paragraphs 1 and 2 prior to allowing them to offer their products or services on those platforms."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+Trial run of video replies in EU,"Roll out video reply functionality to users in EEA only. GH will manage exposure control, and BB is used to baseline feedback.",YES,"The feature requires geo-compliance logic due to its rollout specifically targeting users in the EEA, which is subject to local regulations such as the GDPR. The screening analysis correctly identified the need for compliance measures based on geographic location, supported by the use of 'GH' (Geo-handler) for managing exposure control. The feature's implementation in the EEA necessitates adherence to local compliance policies (LCP) and data protection laws, indicating that geo-logic is essential.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of very large online platforms or of very large online search engines shall, at the request of either the Digital Service Coordinator of establishment or of the Commission, explain the design, the logic, the functioning and the testing of their algorithmic systems, including their recommender systems."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""This Regulation should also be without prejudice to Union rules on private international law, in particular rules regarding jurisdiction and the recognition and enforcement of judgments in civil and commercial matters."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      }
+    ]"
+Canada-first PF variant test,Launch a PF variant in CA as part of early experimentation. Spanner will isolate affected cohorts and Glow flags will monitor feature health.,REVIEW,"The feature involves launching a PF variant in Canada, which suggests a need for localized compliance due to the geographic specificity. However, the screening analysis indicates a medium compliance risk level without definitive regulatory requirements identified. The research highlights relevant regulations, but their direct applicability to the feature's functionality remains unclear, necessitating further investigation into local compliance policies (LCP) and specific requirements in Canada.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The bill would require the Attorney General to adopt regulations to further the purposes of these provisions, including regulations regarding age assurance and parental consent by January 1, 2027."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Utah Social Media Regulation Act"",
+        ""excerpt"": ""Utah has enacted the Social Media Regulation Act aimed at protecting social media users under 18 years of age by restricting social media access, limiting collection and use of minors' data, prohibiting advertisements and addictive design features, and imposing age verification and parental consent requirements."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""
+      }
+    ]"
+Chat UI overhaul,"A new chat layout will be tested in the following regions: CA, US, BR, ID. GH will ensure location targeting and ShadowMode will collect usage metrics without user impact.",REVIEW,"The feature description indicates that a new chat layout will be tested in specific regions (CA, US, BR, ID), which implies a need for compliance with local regulations in those areas. The mention of 'GH' (Geo-handler) suggests that the feature will be tailored to comply with regional laws, indicating compliance intent. However, the exact nature of these compliance requirements is not detailed in the description, and while there are potential data privacy concerns raised by the 'ShadowMode' deployment, the screening analysis does not provide sufficient detail on specific regulatory obligations. Therefore, further research is needed to clarify specific compliance requirements across the mentioned jurisdictions.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The bill would require the Attorney General to adopt regulations to further the purposes of these provisions, including regulations regarding age assurance and parental consent by January 1, 2027."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Regional trial of autoplay behavior,"Enable video autoplay only for users in US. GH filters users, while Spanner logs click-through deltas.",YES,"The feature requires geo-compliance logic due to its specific implementation for users in the US, which necessitates adherence to local regulations regarding autoplay functionality. The screening analysis correctly identified the geographic compliance consideration, and the research highlights relevant regulations that impose restrictions on autoplay features, particularly concerning minors.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""A business that provides an online service, product, or feature likely to be accessed by children to comply with certain requirements."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Utah Social Media Regulation Act"",
+        ""excerpt"": ""Utah has enacted the Social Media Regulation Act aimed at protecting social media users under 18 years of age by restricting social media access, limiting collection and use of minors' data."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""
+      }
+    ]"
+South Korea dark theme A/B experiment,A/B test dark theme accessibility for users in South Korea. Rollout is limited via GH and monitored with FR flags.,REVIEW,"The feature involves an A/B test for dark theme accessibility in South Korea, which raises potential compliance considerations under local accessibility standards. The screening analysis indicates a medium compliance risk due to the lack of explicit regulatory language in the feature description. While the screening agent correctly identified the need for further research, the specific compliance obligations related to accessibility laws in South Korea remain unclear. The research retrieved documents primarily from the EU and Utah, which may not directly apply to the South Korean context, indicating a need for more targeted research on South Korean regulations. Therefore, the necessity for geo-compliance logic is uncertain and requires further investigation into local laws.",[] - no related regulations found
+Age-specific notification controls with ASL,"Notifications will be tailored by age using ASL, allowing us to throttle or suppress push alerts for minors. EchoTrace will log adjustments, and CDS will verify enforcement across rollout waves.",REVIEW,"The feature involves age-specific notification controls using ASL, which is crucial for compliance with regulations protecting minors. However, the geographic scope is currently unknown, and further research is needed to determine if specific geographic compliance logic is required based on varying regulations across jurisdictions.","[  
+     {  
+         ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",  
+         ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",  
+         ""relevance_score"": 0.204,  
+         ""source_filename"": ""20230SB976_91.pdf""  
+     },  
+     {  
+         ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",  
+         ""excerpt"": ""Information collected for the purpose of determining a user\u2019s age or verifying parental consent pursuant to this chapter shall not be used for any purpose other than compliance with this chapter or with another applicable law."",  
+         ""relevance_score"": 0.1,  
+         ""source_filename"": ""20230SB976_91.pdf""  
+     }  
+]"
+Chat content restrictions via LCP,"Enforce message content constraints by injecting LCP rules on delivery. ShadowMode will initially deploy the logic for safe validation. No explicit mention of legal requirements, but privacy context is implied.",REVIEW,"The feature description indicates the enforcement of message content constraints through the injection of LCP rules, which stands for Local Compliance Policy. This suggests that the feature is designed to adhere to region-specific regulations, indicating a potential compliance requirement. However, the geographic scope is currently unknown, and the absence of explicit legal requirements in the description raises questions about the specific regulations being addressed. The implication of privacy context further suggests that user data handling may be involved, necessitating compliance with data protection laws. Therefore, while the feature appears to be compliant with local regulations, the lack of detailed legal references necessitates further research to confirm the specific compliance obligations. The risk level is assessed as medium due to the potential implications of non-compliance with local laws, especially regarding user data privacy and content restrictions.","[  
+    {  
+         ""regulation_name"": ""Utah Social Media Regulation Act"",  
+         ""excerpt"": ""Utah has enacted the Social Media Regulation Act aimed at protecting social media users under 18 years of age by restricting social media access, limiting collection and use of minors' data, prohibiting advertisements and addictive design features, and imposing age verification and parental consent requirements."",  
+         ""relevance_score"": 0.1,   
+         ""source_filename"": ""Utah Enacts Social Media Regulation Act.pdf""  
+     },  
+     {  
+          ""regulation_name"": ""Digital Services Act"",  
+          ""excerpt"": ""(c) complies with rules regarding the updating of the information, specified in a manner widely recognised and used by industry;"",  
+          ""relevance_score"": 0.1,  
+          ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""   
+     }  
+]"
+Video upload limits for new users,Introduce limits on video uploads from new accounts. IMT will trigger thresholds based on BB patterns. These limitations are partly for platform safety but without direct legal mapping.,REVIEW,"The feature introduces limits on video uploads from new accounts, which suggests a proactive approach to user management and compliance with platform safety standards. However, the screening analysis indicates that while there is a compliance intent, the specific legal obligations are not clearly defined. The research retrieved relevant excerpts from the Digital Services Act that emphasize the protection of minors, which may imply a need for compliance considerations. However, the geographic scope is currently unknown, and further research is needed to clarify whether specific regulations apply based on user location.","[  
+    {  
+         ""regulation_name"": ""Digital Services Act"",  
+         ""excerpt"": ""Providers of online platforms accessible to minors shall put in place appropriate and proportionate measures to ensure a high level of privacy, safety, and security of minors, on their service."",  
+         ""relevance_score"": 0.241,  
+         ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""  
+     }  
+]"
+Flag escalation flow for sensitive comments,"A flow that detects high-risk comment content and routes it via CDS with Redline markers. The logic applies generally and is monitored through EchoTrace, with no mention of regional policies.",REVIEW,"The feature description indicates a flow that detects high-risk comment content and routes it via the Compliance Detection System (CDS) with Redline markers. The use of 'high-risk comment content' suggests a proactive approach to compliance, indicating that the feature is designed to identify and manage potentially harmful or non-compliant user-generated content. The presence of Redline markers implies a mechanism for flagging content that requires legal review, which is a clear compliance-related action. Furthermore, the monitoring through EchoTrace indicates a commitment to compliance verification, reinforcing the need for adherence to regulatory standards. However, the absence of mention regarding regional policies may introduce compliance risks, as local compliance policies (LCP) could vary significantly across different jurisdictions. This lack of specificity necessitates further research to ensure that the feature aligns with all applicable local regulations. Overall, the feature's intent and mechanisms suggest a high compliance risk level due to the potential legal implications of managing sensitive content.","[  
+     {  
+          ""regulation_name"": ""Digital Services Act"",  
+          ""excerpt"": ""Providers of very large online platforms and of very large online search engines should ensure that the compliance function is involved, properly and in a timely manner, in all issues which relate to this Regulation including in the risk assessment and mitigation strategy and specific measures."", 
+          ""relevance_score"": 0.1,  
+          ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""  
+      }  
+]"
+User behavior scoring for policy gating,Behavioral scoring via Spanner will be used to gate access to certain tools. The feature tracks usage and adjusts gating based on BB divergence.,REVIEW,"The feature 'User behavior scoring for policy gating' involves behavioral scoring that may impact user privacy and data protection, particularly concerning minors. The screening analysis correctly identifies potential compliance risks associated with data processing and user behavior tracking. However, the geographic scope is currently unknown, which complicates the determination of whether geo-compliance logic is necessary. Further research is needed to clarify if specific jurisdictions impose different requirements regarding user data processing and behavioral scoring.","[
+      {
+        ""regulation_name"": ""Digital Services Act"",
+        ""excerpt"": ""When conducting risk assessments, providers of very large online platforms and of very large online search engines shall take into account, in particular, whether and how the following factors influence any of the systemic risks referred to in paragraph 1: (a) the design of their recommender systems and any other relevant algorithmic system;"",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""CELEX_32022R2065_EN_TXT.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""An operator of an addictive internet-based service or application shall publicly disclose, on an annual basis, the number of minor users of its addictive internet-based service or application, and of that total the number for whom the operator has received verifiable parental consent to provide an addictive feed."",
+        ""relevance_score"": 0.1,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Minor-safe chat expansion via Jellybean,"We’re expanding chat features, but for users flagged by Jellybean, certain functions (e.g., media sharing) will be limited. BB and ASL will monitor compliance posture.",REVIEW,"The feature 'Minor-safe chat expansion via Jellybean' indicates a focus on compliance with child safety regulations, particularly through the use of the Jellybean parental control system. The screening analysis correctly identifies the need for compliance measures due to the involvement of minors, but the geographic scope is marked as 'unknown,' which complicates the determination of whether geo-compliance logic is necessary. The research highlights relevant regulations, particularly the 'Protecting Our Kids from Social Media Addiction Act,' which mandates obtaining verifiable parental consent for minors. However, without a clear geographic scope, it is uncertain if the feature's implementation aligns with specific state regulations. Further investigation is needed to clarify the geographic applicability of these regulations.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.25,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""Information collected for the purpose of determining a user\u2019s age or verifying parental consent... shall not be used for any purpose other than compliance with this chapter."",
+        ""relevance_score"": 0.2,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Friend suggestions with underage safeguards,"New suggestion logic uses PF to recommend friends, but minors are excluded from adult pools using ASL and CDS logic. EchoTrace logs interactions in case future policy gates are needed.",YES,"The feature 'Friend suggestions with underage safeguards' necessitates geo-compliance logic due to the specific regulatory requirements outlined in California's Protecting Our Kids from Social Media Addiction Act. The feature employs ASL (Age-sensitive logic) to exclude minors from adult pools, which aligns with the law's mandates regarding age assurance and parental consent. The screening analysis correctly identifies the need for compliance verification, particularly given the focus on protecting minors. The use of PF (Personalized feed) raises potential compliance concerns regarding data handling and user privacy, which are critical in the context of the identified regulations. Therefore, geo-logic is essential to ensure adherence to California's specific requirements for features affecting minors.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.528,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""Information collected for the purpose of determining a user\u2019s age or verifying parental consent... shall not be used for any purpose other than compliance with this chapter."",
+        ""relevance_score"": 0.528,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Reaction GIFs with embedded filtering,"Enable GIFs in comments, while filtering content deemed inappropriate for minor accounts. Softblock will apply if a flagged GIF is used by ASL-flagged profiles.",YES,"The feature requires geo-compliance logic due to its implications for minors under California's SB976. The screening analysis correctly identifies the need for compliance mechanisms, particularly the use of 'Softblock' for ASL-flagged profiles, which aligns with the regulatory requirements for age verification and parental consent outlined in the Protecting Our Kids from Social Media Addiction Act. The presence of these terms indicates a proactive approach to compliance with local regulations regarding content appropriateness for minors.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""An operator of an addictive internet-based service or application shall publicly disclose, on an annual basis, the number of minor users of its addictive internet-based service or application, and of that total the number for whom the operator has received verifiable parental consent to provide an addictive feed, and the number of minor users as to whom the controls set forth in Section 27002 are or are not enabled."",
+        ""relevance_score"": 0.606,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""It shall be unlawful for the operator of an addictive internet-based service or application... to provide an addictive feed to a user, unless... the operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.575,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Longform posts with age-based moderation,"Longform post creation is now open to all. However, moderation for underage authors is stricter via Snowcap.",REVIEW,"The feature involves age-based moderation for longform posts, specifically indicating stricter moderation for underage authors through the Snowcap policy. This suggests a compliance requirement related to child safety and age verification. However, the geographic scope is currently unknown, which complicates the determination of whether geo-compliance logic is necessary. The screening analysis correctly identifies the compliance risk and the need for further research, but the lack of specific geographic information means that a definitive conclusion cannot be drawn at this time.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The operator has obtained verifiable parental consent to provide an addictive feed to the user who is a minor."",
+        ""relevance_score"": 0.35,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The Attorney General shall adopt regulations to further the purposes of this chapter, including regulations regarding age assurance and parental consent by January 1, 2027."",
+        ""relevance_score"": 0.36,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
+Custom avatar system with identity checks,"Users can now design custom avatars. For safety, T5 triggers block adult-themed assets from use by underage profiles. Age detection uses ASL and logs flow through GH.",YES,"The feature requires geo-compliance logic due to its implications for user age verification and the blocking of adult-themed assets for underage profiles, which are governed by specific regulations such as California's SB976. The feature's design incorporates T5 data sensitivity and ASL for age detection, indicating a proactive approach to compliance with laws protecting minors. The screening analysis correctly identified the need for compliance with regulations concerning minors, particularly in California, where specific mandates exist regarding age assurance and parental consent.","[
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""The bill would require the Attorney General to adopt regulations regarding age assurance and parental consent by January 1, 2027."",
+        ""relevance_score"": 0.581,
+        ""source_filename"": ""20230SB976_91.pdf""
+      },
+      {
+        ""regulation_name"": ""Protecting Our Kids from Social Media Addiction Act"",
+        ""excerpt"": ""An operator of an addictive internet-based service or application shall publicly disclose, on an annual basis, the number of minor users of its addictive internet-based service or application, and of that total the number for whom the operator has received verifiable parental consent."",
+        ""relevance_score"": 0.486,
+        ""source_filename"": ""20230SB976_91.pdf""
+      }
+    ]"
