@@ -7,7 +7,6 @@ from datetime import datetime
 from rag.ingestion.pipeline import PDFIngestionPipeline
 from chroma.chroma_connection import get_chroma_collection
 from agents.orchestrator import ComplianceOrchestrator
-from agents.feedback.learning import LearningAgent
 import os
 import io
 
@@ -53,6 +52,17 @@ class ComplianceResponse(BaseModel):
     
     error: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
+class OriginalResult(BaseModel):
+    flag: Optional[str] = Field(default=None, description="Original yes/no/unknown decision")
+    risk_level: Optional[str] = Field(default=None, description="Original risk level label")
+
+
+class CorrectionData(BaseModel):
+    correct_flag: Optional[str] = Field(default=None, description="Corrected yes/no (optional)")
+    correct_risk_level: Optional[str] = Field(default=None, description="Corrected risk level (optional)")
+    original_result: Optional[OriginalResult] = None
+
+
 class FeedbackRequest(BaseModel):
     analysis_id: str
     feedback_type: Literal["positive", "negative", "needs_context"]
@@ -60,6 +70,7 @@ class FeedbackRequest(BaseModel):
     correction_data: Optional[CorrectionData] = None
     timestamp: Optional[str] = None
     state: Dict[str, Any]  # Full current state object from the client
+
 
 class FeedbackResponse(BaseModel):
     status: Literal["success", "error"]
@@ -289,43 +300,26 @@ async def check_compliance(
 
 @router.post("/compliance/feedback", response_model=FeedbackResponse)
 async def submit_feedback(feedback: FeedbackRequest):
-    # """
-    # Submit feedback for a compliance analysis
-    
-    # Args:
-    #     feedback: FeedbackRequest containing analysis_id, feedback_type, etc.
-    
-    # Returns:
-    #     FeedbackResponse confirming submission
-    # """
-    # try:
-    #     logger.info(f"Receiving feedback for analysis: {feedback.analysis_id}")
-        
-    #     # Process feedback and store for agent learning
-    #     feedback_result = await process_feedback(feedback)
-        
-    #     logger.info(f"Feedback processed successfully for analysis: {feedback.analysis_id}")
-    #     return feedback_result
-        
-    # except Exception as e:
-    #     logger.error(f"Error processing feedback: {str(e)}")
-    #     raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
     """
     Accepts client-side snapshot state + feedback; applies LearningAgent updates.
     """
     try:
         logger.info(f"Feedback received: analysis_id={feedback.analysis_id}, type={feedback.feedback_type}")
 
+
         # Basic validation
         if not feedback.state:
             raise HTTPException(status_code=400, detail="Missing `state` in request body.")
 
+
         # Build LearningAgent input from request
         la_state = build_learning_state_from_request(feedback)
+
 
         # Run learning
         agent = LearningAgent()  # reads PG_CONN_STRING, writes Postgres + JSONLs
         learning_result = await agent.process(la_state)
+
 
         logger.info(f"Learning applied for analysis_id={feedback.analysis_id}")
         return FeedbackResponse(
@@ -335,11 +329,13 @@ async def submit_feedback(feedback: FeedbackRequest):
             learning_report=learning_result.get("learning_report"),
         )
 
+
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Feedback processing failed")
         raise HTTPException(status_code=500, detail=f"Feedback processing failed: {e}")
+
 
 
 # # ================================================
@@ -946,44 +942,33 @@ async def run_compliance_analysis(
 
 def to_learning_user_feedback(req: FeedbackRequest) -> Dict[str, Any]:
     """
-    Map API feedback to LearningAgent's expected:
-      {"is_correct": "yes"|"no", "notes": "..."}
+    Only map to LearningAgent format:
+      - is_correct: 'yes' if correction_data.correct_flag != original_result.flag, else 'no'
+      - notes: exactly feedback_text
     """
-    # default
-    is_correct = "yes" if req.feedback_type == "positive" else "no"
+    def norm_flag(v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        s = str(v).strip().lower()
+        if s in {"yes", "true", "y", "1"}:
+            return "yes"
+        if s in {"no", "false", "n", "0"}:
+            return "no"
+        return None
 
-    # If caller provided a corrected flag, respect it (e.g., "yes"/"no"/"true"/"false")
-    cf = (req.correction_data.correct_flag.lower()
-          if req.correction_data and req.correction_data.correct_flag
-          else "")
-    if cf in {"yes", "true"}:
-        is_correct = "yes"
-    elif cf in {"no", "false"}:
-        is_correct = "no"
 
-    # Build notes: include feedback_text + corrections delta (if any)
-    notes_parts = []
-    if req.feedback_text:
-        notes_parts.append(req.feedback_text.strip())
+    cf, of = None, None
+    if getattr(req, "correction_data", None):
+        cf = norm_flag(getattr(req.correction_data, "correct_flag", None))
+        orig = getattr(req.correction_data, "original_result", None)
+        if orig:
+            of = norm_flag(getattr(orig, "flag", None))
 
-    if req.correction_data:
-        deltas = []
-        if req.correction_data.original_result:
-            orig = req.correction_data.original_result
-            if orig.flag or req.correction_data.correct_flag:
-                deltas.append(f'flag: {orig.flag or "?"} -> {req.correction_data.correct_flag or "?"}')
-            if orig.risk_level or req.correction_data.correct_risk_level:
-                deltas.append(f'risk_level: {orig.risk_level or "?"} -> {req.correction_data.correct_risk_level or "?"}')
-        if deltas:
-            notes_parts.append("Corrections: " + "; ".join(deltas))
 
-    # If “needs_context”, we still return is_correct="no" but annotate reason
-    if req.feedback_type == "needs_context":
-        notes_parts.append("User indicates missing context the system should consider.")
-
+    is_correct = "yes" if (cf is not None and of is not None and cf != of) else "no"
     return {
         "is_correct": is_correct,
-        "notes": " ".join(p for p in notes_parts if p)
+        "notes": (req.feedback_text or "").strip()
     }
 
 
@@ -999,6 +984,7 @@ def build_learning_state_from_request(req: FeedbackRequest) -> Dict[str, Any]:
         - user_feedback (normalized)
     """
     s = req.state or {}
+    print(to_learning_user_feedback(req))
     return {
         "feature_name": s.get("feature_name", ""),
         "feature_description": s.get("feature_description", ""),

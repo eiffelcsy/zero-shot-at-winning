@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]   # → .../app
+ROOT = Path(__file__).resolve().parents[2]   # → .../app
 DEFAULT_FEEDBACK = ROOT / "data" / "feedback.jsonl"
 
 # ---------- Pydantic models for LLM output ----------
