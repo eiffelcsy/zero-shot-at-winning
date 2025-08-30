@@ -7,7 +7,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from .base import BaseComplianceAgent
-from .prompts.templates import build_learning_prompt
+from .prompts import build_learning_prompt
 from .memory_pg import PostgresMemoryStore, ApplyResult
 import json
 import os

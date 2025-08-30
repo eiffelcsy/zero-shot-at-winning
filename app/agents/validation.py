@@ -3,7 +3,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field, HttpUrl
 from .base import BaseComplianceAgent
-from .prompts.templates import build_validation_prompt
+from .prompts import build_validation_prompt
 from .memory_pg import PostgresMemoryStore
 from typing import Dict, Any, List, Literal
 from datetime import datetime

@@ -3,13 +3,13 @@ from typing import List, Dict, Any
 import json
 from datetime import datetime
 
-from .prompts.templates import build_research_prompt, build_search_query_prompt
+from .prompts import build_research_prompt, build_search_query_prompt
 from .base import BaseComplianceAgent
 from langgraph.graph import END
-from rag.retrieval.query_processor import QueryProcessor
-from rag.retrieval.retriever import RAGRetriever
-from rag.tools.retrieval_tool import RetrievalTool
-from chroma.chroma_connection import get_chroma_client, get_chroma_collection
+from ..rag.retrieval.query_processor import QueryProcessor
+from ..rag.retrieval.retriever import RAGRetriever
+from ..rag.tools.retrieval_tool import RetrievalTool
+from ..chroma.chroma_connection import get_chroma_client, get_chroma_collection
 
 class ResearchOutput(BaseModel):
     agent: str = Field(description="Agent name")
