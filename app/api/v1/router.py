@@ -2,7 +2,6 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-import logging
 import uuid
 from datetime import datetime
 from rag.ingestion.pipeline import PDFIngestionPipeline
@@ -11,9 +10,12 @@ from agents.orchestrator import ComplianceOrchestrator
 import os
 import io
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Use the enhanced logging system that automatically saves to files
+from logs.logging_config import ensure_logging_setup, get_logger
+
+# Ensure logging is set up for the API router
+ensure_logging_setup()
+logger = get_logger("api.router")
 
 # Initialize the router
 router = APIRouter(prefix="/api/v1", tags=["pdf-upload"])
@@ -50,6 +52,9 @@ class ComplianceResponse(BaseModel):
     
     error: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
+# Log API router initialization
+logger.info("=== Initializing API Router ===")
+
 # Initialize the PDF ingestion pipeline
 pipeline = PDFIngestionPipeline(
     chunk_size=1000,
@@ -57,6 +62,7 @@ pipeline = PDFIngestionPipeline(
     embedding_model="text-embedding-3-large",
     collection_name="regulation_kb"
 )
+logger.info("PDF ingestion pipeline initialized")
 
 # Initialize the compliance orchestrator for LangGraph multi-agent workflow
 # Get proper TikTok terminology overlay from the new combined memory system
@@ -67,15 +73,16 @@ try:
     screening_overlay = overlays["screening"]
     logger.info(f"Loaded TikTok terminology overlay ({len(screening_overlay)} characters)")
     if "TIKTOK TERMINOLOGY REFERENCE" in screening_overlay:
-        logger.info("✓ TikTok terminology successfully loaded and integrated")
+        logger.info("TikTok terminology successfully loaded and integrated")
     else:
-        logger.warning("⚠ TikTok terminology NOT found in overlay")
+        logger.warning("TikTok terminology NOT found in overlay")
 except Exception as e:
     logger.error(f"Failed to load TikTok terminology overlay: {e}")
     logger.warning("Compliance analysis will run without TikTok terminology context")
     screening_overlay = ""
 
 compliance_orchestrator = ComplianceOrchestrator(memory_overlay=screening_overlay)
+logger.info("Compliance orchestrator initialized with TikTok terminology context")
 
 # ================================================
 # REGULATION UPLOAD ENDPOINTS
@@ -507,7 +514,11 @@ async def run_compliance_analysis(
     - Validation Agent: Final decision validation
     - Learning Agent: Feedback integration
     """
-    logger.info(f"Running LangGraph compliance analysis for feature: {title}")
+    logger.info(f"=== Starting Compliance Analysis ===")
+    logger.info(f"Feature: {title}")
+    logger.info(f"Description length: {len(description)} characters")
+    logger.info(f"Document content provided: {document_content is not None}")
+    logger.info(f"Document metadata: {document_metadata}")
     
     try:
         # Prepare context documents if provided
@@ -517,13 +528,29 @@ async def run_compliance_analysis(
                 "content": document_content,
                 "metadata": document_metadata or {}
             }
+            logger.info(f"Context documents prepared: {len(document_content)} characters")
+        else:
+            logger.info("No context documents provided")
+        
+        # Log orchestrator status
+        logger.info(f"Orchestrator memory overlay length: {len(compliance_orchestrator.memory_overlay) if compliance_orchestrator.memory_overlay else 0}")
+        if compliance_orchestrator.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in compliance_orchestrator.memory_overlay:
+            logger.info("Orchestrator has TikTok terminology context")
+        else:
+            logger.warning("Orchestrator missing TikTok terminology context")
         
         # Execute the LangGraph multi-agent workflow
+        logger.info("Executing LangGraph multi-agent workflow...")
         orchestrator_result = await compliance_orchestrator.analyze_feature(
             feature_name=title,
             feature_description=description,
             context_documents=context_documents
         )
+        logger.info("LangGraph workflow execution completed")
+        
+        # Log orchestrator results
+        logger.info(f"Orchestrator result keys: {list(orchestrator_result.keys())}")
+        logger.info(f"Agents completed: {orchestrator_result.get('agents_completed', [])}")
         
         # Map orchestrator result to API response format
         # Extract agent-specific results for detailed UI display with safe access
@@ -532,10 +559,16 @@ async def run_compliance_analysis(
         validation_analysis = orchestrator_result.get("validation_analysis")
         final_decision = orchestrator_result.get("final_decision")
         
+        logger.info(f"Screening analysis present: {screening_analysis is not None}")
+        logger.info(f"Research analysis present: {research_analysis is not None}")
+        logger.info(f"Validation analysis present: {validation_analysis is not None}")
+        logger.info(f"Final decision present: {final_decision is not None}")
+        
         # Safely extract agents completed list
         agents_completed = orchestrator_result.get("agents_completed", [])
         if not isinstance(agents_completed, list):
             agents_completed = []
+            logger.warning("Agents completed is not a list, defaulting to empty")
         
         # Determine agent statuses with error handling
         agent_statuses = {
@@ -543,21 +576,31 @@ async def run_compliance_analysis(
             "research": "completed" if "research" in agents_completed else "pending",
             "validation": "completed" if "validation" in agents_completed else "pending"
         }
+        logger.info(f"Agent statuses: {agent_statuses}")
         
         # Handle workflow completion status
         workflow_completed = orchestrator_result.get("workflow_completed", False)
         if workflow_completed is None:
             workflow_completed = False
+            logger.warning("Workflow completed is None, defaulting to False")
         
         # Safely extract related regulations
         related_regulations = orchestrator_result.get("related_regulations", [])
         if not isinstance(related_regulations, list):
             related_regulations = []
+            logger.warning("Related regulations is not a list, defaulting to empty")
         
         # Safely extract applicable jurisdictions
         applicable_jurisdictions = orchestrator_result.get("applicable_jurisdictions", [])
         if not isinstance(applicable_jurisdictions, list):
             applicable_jurisdictions = []
+            logger.warning("Applicable jurisdictions is not a list, defaulting to empty")
+        
+        # Log confidence score
+        confidence_score = float(orchestrator_result.get("confidence_score", 0.0))
+        logger.info(f"Confidence score: {confidence_score}")
+        
+        logger.info("=== Compliance Analysis Completed Successfully ===")
         
         return ComplianceResponse(
             status="success",
@@ -573,13 +616,18 @@ async def run_compliance_analysis(
             # Overall workflow results
             agents_completed=agents_completed,
             workflow_status="completed",
-            confidence_score=float(orchestrator_result.get("confidence_score", 0.0)),
+            confidence_score=confidence_score,
             
             error=orchestrator_result.get("error")
         )
         
     except Exception as e:
-        logger.error(f"Error in LangGraph compliance analysis: {str(e)}")
+        logger.error(f"=== Compliance Analysis Failed ===")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
         return ComplianceResponse(
             status="error",
             message=f"Compliance analysis failed for '{title}': {str(e)}",

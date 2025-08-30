@@ -45,20 +45,26 @@ class ResearchAgent(BaseComplianceAgent):
 
     def _setup_chain(self):
         """Setup LangChain prompt and parser with dynamic prompt building and TikTok terminology context"""
+        # Setup main research chain for final synthesis
         research_prompt = build_research_prompt(self.memory_overlay)
         
         # Enhanced logging for memory overlay integration
         if self.memory_overlay:
             self.logger.info(f"Research agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("✓ TikTok terminology found in memory overlay - agents will understand TikTok acronyms")
-                self.logger.info("✓ Agents can now properly interpret: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
+                self.logger.info("TikTok terminology found in memory overlay - agents will understand TikTok acronyms")
+                self.logger.info("Agents can now properly interpret: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
             else:
-                self.logger.warning("⚠ TikTok terminology NOT found in memory overlay - agents may miss TikTok-specific context")
+                self.logger.warning("TikTok terminology NOT found in memory overlay - agents may miss TikTok-specific context")
         else:
-            self.logger.warning("⚠ Research agent initialized with NO memory overlay - will lack TikTok terminology context")
+            self.logger.warning("Research agent initialized with NO memory overlay - will lack TikTok terminology context")
         
+        # Create main research chain for final synthesis
         self.create_chain(research_prompt, ResearchOutput)
+        
+        # Create separate search query chain (no output model needed for plain string output)
+        search_query_prompt = build_search_query_prompt(self.memory_overlay)
+        self.search_query_chain = search_query_prompt | self.llm
     
     def update_memory(self, new_memory_overlay: str):
         """Allow runtime updates to the prompt for learning with TikTok terminology context"""
@@ -71,7 +77,11 @@ class ResearchAgent(BaseComplianceAgent):
         research_prompt = build_research_prompt(new_memory_overlay)
         self.create_chain(research_prompt, ResearchOutput)
         
-        self.logger.info("✓ Research agent chain rebuilt with updated TikTok terminology context")
+        # Also rebuild the search query chain with new memory context
+        search_query_prompt = build_search_query_prompt(new_memory_overlay)
+        self.search_query_chain = search_query_prompt | self.llm
+        
+        self.logger.info("Research agent chain and search query chain rebuilt with updated TikTok terminology context")
     
     def _build_fallback_query(self, context: Dict) -> str:
         """Build a fallback query when LLM query generation fails"""
@@ -141,21 +151,32 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 4: Extract regulations from retrieved docs with proper relevance scoring
             regulations = self._extract_regulations(raw_results)
             
+            # Debug: Log what was extracted
+            self.logger.info(f"Extracted {len(regulations)} regulations from {len(raw_results)} raw results")
+            if regulations:
+                self.logger.info(f"First regulation keys: {list(regulations[0].keys())}")
+                self.logger.info(f"First regulation content length: {len(regulations[0].get('content', ''))}")
+            else:
+                self.logger.warning("No regulations extracted - this will cause the synthesis to fail!")
+            
             # Step 5: Use LLM for final synthesis with proper input format and TikTok context
             synthesis_input = {
                 "feature_name": feature_name,
                 "feature_description": feature_description,
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "retrieved_regulations": json.dumps(regulations, indent=2),
-                "queries_used": json.dumps(expanded_queries, indent=2)
+                "evidence_found": json.dumps(regulations, indent=2)
             }
+            
+            # Debug: Log the synthesis input
+            self.logger.info(f"Synthesis input keys: {list(synthesis_input.keys())}")
+            self.logger.info(f"Evidence found length: {len(synthesis_input['evidence_found'])} characters")
             
             # Log the synthesis attempt with memory context
             self.logger.info(f"Research agent synthesizing results with {len(regulations)} regulations found")
             if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("✓ Synthesis includes TikTok terminology context for better compliance analysis")
+                self.logger.info("Synthesis includes TikTok terminology context for better compliance analysis")
             else:
-                self.logger.warning("⚠ Synthesis missing TikTok terminology context")
+                self.logger.warning("Synthesis missing TikTok terminology context")
             
             final_result = await self.safe_llm_call(synthesis_input)
             
@@ -164,7 +185,7 @@ class ResearchAgent(BaseComplianceAgent):
                 "agent": "ResearchAgent",
                 "regulations": regulations,
                 "queries_used": expanded_queries,
-                "confidence_score": final_result.get("confidence_score", 0.0),
+                "confidence_score": self._calculate_research_confidence(regulations, raw_results),  # Calculate based on retrieved documents
                 "documents_retrieved": len(raw_results),
                 "synthesis_result": final_result,
                 "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or ""),
@@ -172,8 +193,8 @@ class ResearchAgent(BaseComplianceAgent):
             }
             
             # Log successful research completion
-            self.logger.info(f"✓ Research agent completed analysis for '{feature_name}' with {len(regulations)} regulations")
-            self.logger.info(f"✓ TikTok terminology context: {'Available' if research_analysis['tiktok_terminology_used'] else 'Missing'}")
+            self.logger.info(f"Research agent completed analysis for '{feature_name}' with {len(regulations)} regulations")
+            self.logger.info(f"TikTok terminology context: {'Available' if research_analysis['tiktok_terminology_used'] else 'Missing'}")
             
             return {
                 "research_analysis": research_analysis,
@@ -201,28 +222,30 @@ class ResearchAgent(BaseComplianceAgent):
     async def _generate_search_query_llm(self, screening_analysis: Dict) -> str:
         """Generate search query using LLM with TikTok terminology context"""
         try:
-            # Build search query prompt with TikTok terminology context
-            search_prompt = build_search_query_prompt(self.memory_overlay)
-            
             # Log the search query generation attempt
             self.logger.info("Generating search query using LLM with TikTok terminology context")
             
-            # Prepare input for search query generation
+            # Prepare input for search query generation - only screening_analysis is needed
             search_input = {
-                "feature_name": screening_analysis.get("feature_name", ""),
-                "feature_description": screening_analysis.get("feature_description", ""),
                 "screening_analysis": json.dumps(screening_analysis, indent=2)
             }
             
-            # Generate search query
-            search_result = await self.safe_llm_call(search_input)
-            
-            # Extract the generated query
-            generated_query = search_result.get("search_query", "")
+            # Generate search query using the search query chain (not safe_llm_call)
+            if hasattr(self, 'search_query_chain') and self.search_query_chain:
+                search_result = await self.search_query_chain.ainvoke(search_input)
+                generated_query = search_result.strip() if isinstance(search_result, str) else str(search_result)
+            else:
+                # Fallback to safe_llm_call if chain not available
+                self.logger.warning("Search query chain not available, using safe_llm_call fallback")
+                search_result = await self.safe_llm_call(search_input)
+                generated_query = search_result.get("search_query", "")
             
             if not generated_query:
                 self.logger.warning("LLM failed to generate search query, using fallback")
-                generated_query = self._build_fallback_query(search_input)
+                generated_query = self._build_fallback_query({
+                    "feature_name": screening_analysis.get("feature_name", ""),
+                    "feature_description": screening_analysis.get("feature_description", "")
+                })
             
             # Log the generated query
             self.logger.info(f"Generated search query: '{generated_query}'")
@@ -232,7 +255,7 @@ class ResearchAgent(BaseComplianceAgent):
                 tiktok_terms = ["NR", "PF", "GH", "CDS", "DRT", "LCP", "Redline", "Softblock", "Spanner", "ShadowMode", "T5", "ASL", "Glow", "NSP", "Jellybean", "EchoTrace", "BB", "Snowcap", "FR", "IMT"]
                 found_terms = [term for term in tiktok_terms if term in generated_query]
                 if found_terms:
-                    self.logger.info(f"✓ Search query includes TikTok terminology: {found_terms}")
+                    self.logger.info(f"Search query includes TikTok terminology: {found_terms}")
                 else:
                     self.logger.info("Search query generated without specific TikTok terminology (may be appropriate)")
             
@@ -253,7 +276,7 @@ class ResearchAgent(BaseComplianceAgent):
         for i, result in enumerate(raw_results):
             try:
                 # Extract document content and metadata
-                content = result.get("content", "")
+                content = result.get("document", "")  # Changed from "content" to "document"
                 metadata = result.get("metadata", {})
                 
                 # Basic regulation extraction
@@ -261,8 +284,8 @@ class ResearchAgent(BaseComplianceAgent):
                     "id": f"reg_{i+1}",
                     "content": content[:500] + "..." if len(content) > 500 else content,  # Truncate for readability
                     "metadata": metadata,
-                    "relevance_score": result.get("score", 0.0),
-                    "source": metadata.get("source", "unknown"),
+                    "relevance_score": 1.0 - (result.get("distance", 0.0) if result.get("distance") is not None else 0.0),  # Convert distance to relevance score
+                    "source": metadata.get("source_filename", "unknown"),  # Changed from "source" to "source_filename"
                     "page": metadata.get("page", "unknown")
                 }
                 
@@ -273,7 +296,7 @@ class ResearchAgent(BaseComplianceAgent):
                     if found_terms:
                         regulation["tiktok_terminology_found"] = found_terms
                         regulation["relevance_score"] = min(regulation["relevance_score"] * 1.2, 1.0)  # Boost relevance for TikTok-specific content
-                        self.logger.info(f"✓ Regulation {i+1} contains TikTok terminology: {found_terms}")
+                        self.logger.info(f"Regulation {i+1} contains TikTok terminology: {found_terms}")
                 
                 regulations.append(regulation)
                 
@@ -287,4 +310,37 @@ class ResearchAgent(BaseComplianceAgent):
         self.logger.info(f"Extracted {len(regulations)} regulations from {len(raw_results)} retrieved documents")
         
         return regulations
+
+    def _calculate_research_confidence(self, regulations: List[Dict], raw_results: List[Dict]) -> float:
+        """Calculate confidence score based on retrieved documents and their relevance"""
+        if not regulations or not raw_results:
+            return 0.0
+        
+        try:
+            # Calculate confidence based on:
+            # 1. Number of relevant documents found
+            # 2. Average relevance scores
+            # 3. Content quality (non-empty content)
+            
+            total_docs = len(raw_results)
+            relevant_docs = len([r for r in regulations if r.get("content", "").strip()])
+            avg_relevance = sum(r.get("relevance_score", 0.0) for r in regulations) / len(regulations) if regulations else 0.0
+            
+            # Content quality score (percentage of non-empty content)
+            content_quality = relevant_docs / total_docs if total_docs > 0 else 0.0
+            
+            # Weighted confidence calculation
+            confidence = (
+                (content_quality * 0.4) +      # 40% weight on content quality
+                (avg_relevance * 0.4) +        # 40% weight on relevance scores
+                (min(relevant_docs / 5, 1.0) * 0.2)  # 20% weight on having sufficient documents
+            )
+            
+            self.logger.info(f"Research confidence calculation: content_quality={content_quality:.2f}, avg_relevance={avg_relevance:.2f}, relevant_docs={relevant_docs}/{total_docs}, final_confidence={confidence:.2f}")
+            
+            return min(max(confidence, 0.0), 1.0)  # Ensure between 0.0 and 1.0
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating research confidence: {e}")
+            return 0.0
 

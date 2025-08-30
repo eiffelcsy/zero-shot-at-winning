@@ -115,7 +115,18 @@ def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
     )
 
 def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
+    # Build the template with memory overlay integration
+    template = SEARCH_QUERY_GENERATION
+    
+    # If memory overlay contains TikTok terminology, add it to the template
+    if memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in memory_overlay:
+        template = f"""
+{memory_overlay}
+
+{SEARCH_QUERY_GENERATION}
+"""
+    
     return PromptTemplate(
         input_variables=["screening_analysis"],
-        template=SEARCH_QUERY_GENERATION
+        template=template
     )

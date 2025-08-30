@@ -7,7 +7,7 @@ import logging
 import asyncio
 import json
 from datetime import datetime
-from app.logs.logging_config import get_logger
+from logs.logging_config import get_logger
 
 
 class BaseComplianceAgent:
@@ -32,11 +32,11 @@ class BaseComplianceAgent:
         if self.memory_overlay:
             self.logger.info(f"Agent {name} initialized with memory overlay ({len(self.memory_overlay)} characters)")
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info(f"✓ Agent {name} has access to TikTok terminology context")
+                self.logger.info(f"Agent {name} has access to TikTok terminology context")
             else:
-                self.logger.warning(f"⚠ Agent {name} memory overlay missing TikTok terminology")
+                self.logger.warning(f"Agent {name} memory overlay missing TikTok terminology")
         else:
-            self.logger.warning(f"⚠ Agent {name} initialized with NO memory overlay - will lack TikTok context")
+            self.logger.warning(f"Agent {name} initialized with NO memory overlay - will lack TikTok context")
     
     def create_chain(self, prompt_template: PromptTemplate, output_model: Optional[BaseModel] = None):
         """Standard LangChain setup with enhanced error checking and memory overlay integration"""
@@ -58,9 +58,9 @@ class BaseComplianceAgent:
         
         # Verify memory overlay integration
         if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-            self.logger.info(f"✓ Chain for {self.name} includes TikTok terminology context")
+            self.logger.info(f"Chain for {self.name} includes TikTok terminology context")
         else:
-            self.logger.warning(f"⚠ Chain for {self.name} missing TikTok terminology context")
+            self.logger.warning(f"Chain for {self.name} missing TikTok terminology context")
     
     def update_memory(self, new_memory_overlay: str):
         """Update memory overlay and rebuild chain with new context"""
@@ -73,9 +73,9 @@ class BaseComplianceAgent:
         
         # Verify TikTok terminology is present
         if new_memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in new_memory_overlay:
-            self.logger.info(f"✓ Updated memory overlay for {self.name} includes TikTok terminology")
+            self.logger.info(f"Updated memory overlay for {self.name} includes TikTok terminology")
         else:
-            self.logger.warning(f"⚠ Updated memory overlay for {self.name} missing TikTok terminology")
+            self.logger.warning(f"Updated memory overlay for {self.name} missing TikTok terminology")
         
         # Rebuild chain if prompt template exists
         if self.prompt_template:
@@ -96,11 +96,11 @@ class BaseComplianceAgent:
         # Log memory overlay status
         if self.memory_overlay:
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info(f"✓ Agent {self.name} used TikTok terminology context")
+                self.logger.info(f"Agent {self.name} used TikTok terminology context")
             else:
-                self.logger.warning(f"⚠ Agent {self.name} memory overlay missing TikTok terminology")
+                self.logger.warning(f"Agent {self.name} memory overlay missing TikTok terminology")
         else:
-            self.logger.warning(f"⚠ Agent {self.name} has no memory overlay")
+            self.logger.warning(f"Agent {self.name} has no memory overlay")
         
         # Log key metrics without sensitive data
         input_summary = {
@@ -160,11 +160,11 @@ class BaseComplianceAgent:
         
         if self.memory_overlay:
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info(f"✓ LLM call includes TikTok terminology context")
+                self.logger.info(f"LLM call includes TikTok terminology context")
             else:
-                self.logger.warning(f"⚠ LLM call missing TikTok terminology context")
+                self.logger.warning(f"LLM call missing TikTok terminology context")
         else:
-            self.logger.warning(f"⚠ LLM call has no memory overlay")
+            self.logger.warning(f"LLM call has no memory overlay")
         
         for attempt in range(max_retries):
             try:
@@ -188,7 +188,7 @@ class BaseComplianceAgent:
                 self.logger.debug(f"LLM call succeeded on attempt {attempt + 1}, time: {execution_time:.2f}s")
                 
                 # Log successful LLM call with memory context
-                self.logger.info(f"✓ LLM call successful for {self.name} in {execution_time:.2f}s")
+                self.logger.info(f"LLM call successful for {self.name} in {execution_time:.2f}s")
                 
                 return validated_result
                 

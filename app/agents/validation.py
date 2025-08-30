@@ -44,12 +44,12 @@ class ValidationAgent(BaseComplianceAgent):
         if self.memory_overlay:
             self.logger.info(f"Validation agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("✓ TikTok terminology found in memory overlay - validation will understand TikTok acronyms")
-                self.logger.info("✓ Can properly validate: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
+                self.logger.info("TikTok terminology found in memory overlay - validation will understand TikTok acronyms")
+                self.logger.info("Can properly validate: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
             else:
-                self.logger.warning("⚠ TikTok terminology NOT found in memory overlay - validation may miss TikTok-specific compliance requirements")
+                self.logger.warning("TikTok terminology NOT found in memory overlay - validation may miss TikTok-specific compliance requirements")
         else:
-            self.logger.warning("⚠ Validation agent initialized with NO memory overlay - will lack TikTok terminology context")
+            self.logger.warning("Validation agent initialized with NO memory overlay - will lack TikTok terminology context")
         
         self.create_chain(validation_prompt, ValidationOutput)
     
@@ -64,7 +64,7 @@ class ValidationAgent(BaseComplianceAgent):
         validation_prompt = build_validation_prompt(new_memory_overlay)
         self.create_chain(validation_prompt, ValidationOutput)
         
-        self.logger.info("✓ Validation agent chain rebuilt with updated TikTok terminology context")
+        self.logger.info("Validation agent chain rebuilt with updated TikTok terminology context")
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """LangGraph-compatible process method with TikTok terminology context"""
@@ -93,11 +93,11 @@ class ValidationAgent(BaseComplianceAgent):
             # Log memory overlay status for this validation
             if self.memory_overlay:
                 if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                    self.logger.info("✓ Validation analysis includes TikTok terminology context")
+                    self.logger.info("Validation analysis includes TikTok terminology context")
                 else:
-                    self.logger.warning("⚠ Validation analysis missing TikTok terminology context")
+                    self.logger.warning("Validation analysis missing TikTok terminology context")
             else:
-                self.logger.warning("⚠ Validation analysis has no memory overlay")
+                self.logger.warning("Validation analysis has no memory overlay")
 
             # Prepare input for validation with TikTok terminology context
             validation_input = {
@@ -117,10 +117,10 @@ class ValidationAgent(BaseComplianceAgent):
             enhanced_result = self._enhance_result(result, state)
             
             # Log successful validation completion
-            self.logger.info(f"✓ Validation analysis completed for '{feature_name}'")
-            self.logger.info(f"✓ Final decision: {enhanced_result.get('final_decision', 'UNKNOWN')}")
-            self.logger.info(f"✓ Confidence score: {enhanced_result.get('confidence_score', 0.0)}")
-            self.logger.info(f"✓ TikTok terminology used: {enhanced_result.get('tiktok_terminology_used', False)}")
+            self.logger.info(f"Validation analysis completed for '{feature_name}'")
+            self.logger.info(f"Final decision: {enhanced_result.get('final_decision', 'UNKNOWN')}")
+            self.logger.info(f"Confidence score: {enhanced_result.get('confidence_score', 0.0)}")
+            self.logger.info(f"TikTok terminology used: {enhanced_result.get('tiktok_terminology_used', False)}")
             
             # Log interaction with enhanced context
             self.log_interaction(validation_input, enhanced_result)
@@ -217,14 +217,14 @@ class ValidationAgent(BaseComplianceAgent):
         
         for pattern in tiktok_patterns:
             if pattern in result_text:
-                self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in validation result")
+                self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in validation result")
                 return True
         
         # Check reasoning field specifically
         reasoning = result.get("reasoning", "").lower()
         for pattern in tiktok_patterns:
             if pattern in reasoning:
-                self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in reasoning")
+                self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in reasoning")
                 return True
         
         # Check compliance requirements field
@@ -234,7 +234,7 @@ class ValidationAgent(BaseComplianceAgent):
                 req_lower = req.lower()
                 for pattern in tiktok_patterns:
                     if pattern in req_lower:
-                        self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in compliance requirements")
+                        self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in compliance requirements")
                         return True
         
         # Check recommendations field
@@ -244,7 +244,7 @@ class ValidationAgent(BaseComplianceAgent):
                 rec_lower = rec.lower()
                 for pattern in tiktok_patterns:
                     if pattern in rec_lower:
-                        self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in recommendations")
+                        self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in recommendations")
                         return True
         
         self.logger.info("No TikTok terminology detected in validation result")

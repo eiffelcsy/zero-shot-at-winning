@@ -138,16 +138,22 @@ class TestPromptTemplates:
 
     def test_research_prompt_formatting(self):
         """Test that research prompt formats correctly with sample data"""
+        feature_name = "Test Feature"
+        feature_description = "A test feature for compliance screening"
         screening_analysis = "Supplier X flagged for AML risks in APAC"
         evidence_found = "No documents retrieved in this test."
         
         formatted_prompt = RESEARCH_PROMPT.format(
+            feature_name=feature_name,
+            feature_description=feature_description,
             screening_analysis=screening_analysis,
             evidence_found=evidence_found
         )
         
         assert isinstance(formatted_prompt, str)
         assert len(formatted_prompt) > 100  # Should be substantial
+        assert feature_name in formatted_prompt
+        assert feature_description in formatted_prompt
         assert screening_analysis in formatted_prompt
         assert evidence_found in formatted_prompt
         assert "JSON" in formatted_prompt
@@ -161,6 +167,8 @@ class TestPromptTemplates:
     def test_prompt_variable_substitution(self, screening_analysis):
         """Test research prompt formatting with various inputs"""
         formatted_prompt = RESEARCH_PROMPT.format(
+            feature_name="Test Feature",
+            feature_description="Test description",
             screening_analysis=screening_analysis,
             evidence_found="placeholder evidence"
         )
@@ -171,12 +179,14 @@ class TestPromptTemplates:
     def test_output_schema_present(self):
         """Test that the research prompt specifies the required output schema"""
         formatted_prompt = RESEARCH_PROMPT.format(
+            feature_name="test",
+            feature_description="test description",
             screening_analysis="test",
             evidence_found="test evidence"
         )
         
         required_fields = [
-            "agent", "candidates", "evidence",
+            "agent", "regulations",
             "query_used", "confidence_score"
         ]
         
@@ -185,13 +195,13 @@ class TestPromptTemplates:
     
     def test_prompt_input_variables(self):
         """Test that prompt has correct input variables"""
-        assert set(RESEARCH_PROMPT.input_variables) == {"screening_analysis", "evidence_found"}
+        assert set(RESEARCH_PROMPT.input_variables) == {"feature_name", "feature_description", "screening_analysis", "evidence_found"}
     
     def test_research_output_schema_structure(self):
         """Test that the research output schema has required fields"""
         required_keys = [
-            "agent", "candidates", "evidence", 
-            "query_used", "confidence_score"
+            "agent", "regulations", 
+            "queries_used", "confidence_score"
         ]
         
         for key in required_keys:
@@ -200,6 +210,8 @@ class TestPromptTemplates:
     def test_prompt_references_regulatory_concepts(self):
         """Test that research prompt references regulatory/compliance concepts"""
         formatted_prompt = RESEARCH_PROMPT.format(
+            feature_name="Test Feature",
+            feature_description="Test description",
             screening_analysis="Supplier X AML risk",
             evidence_found="Evidence sample"
         )
@@ -217,6 +229,8 @@ class TestPromptTemplates:
     def test_prompt_emphasizes_evidence_synthesis(self):
         """Test that research prompt emphasizes evidence-based reasoning"""
         formatted_prompt = RESEARCH_PROMPT.format(
+            feature_name="Test Feature",
+            feature_description="Test description",
             screening_analysis="Supplier X flagged",
             evidence_found="Sample evidence"
         )

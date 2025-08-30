@@ -38,12 +38,12 @@ class ScreeningAgent(BaseComplianceAgent):
         if self.memory_overlay:
             self.logger.info(f"Screening agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("✓ TikTok terminology found in memory overlay - screening will understand TikTok acronyms")
-                self.logger.info("✓ Can properly assess: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
+                self.logger.info("TikTok terminology found in memory overlay - screening will understand TikTok acronyms")
+                self.logger.info("Can properly assess: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
             else:
-                self.logger.warning("⚠ TikTok terminology NOT found in memory overlay - screening may miss TikTok-specific compliance indicators")
+                self.logger.warning("TikTok terminology NOT found in memory overlay - screening may miss TikTok-specific compliance indicators")
         else:
-            self.logger.warning("⚠ Screening agent initialized with NO memory overlay - will lack TikTok terminology context")
+            self.logger.warning("Screening agent initialized with NO memory overlay - will lack TikTok terminology context")
         
         self.create_chain(screening_prompt, ScreeningOutput)
     
@@ -58,7 +58,7 @@ class ScreeningAgent(BaseComplianceAgent):
         screening_prompt = build_screening_prompt(new_memory_overlay)
         self.create_chain(screening_prompt, ScreeningOutput)
         
-        self.logger.info("✓ Screening agent chain rebuilt with updated TikTok terminology context")
+        self.logger.info("Screening agent chain rebuilt with updated TikTok terminology context")
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze feature for compliance risk with TikTok terminology context"""
@@ -78,11 +78,11 @@ class ScreeningAgent(BaseComplianceAgent):
             # Log memory overlay status for this analysis
             if self.memory_overlay:
                 if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                    self.logger.info("✓ Screening analysis includes TikTok terminology context")
+                    self.logger.info("Screening analysis includes TikTok terminology context")
                 else:
-                    self.logger.warning("⚠ Screening analysis missing TikTok terminology context")
+                    self.logger.warning("Screening analysis missing TikTok terminology context")
             else:
-                self.logger.warning("⚠ Screening analysis has no memory overlay")
+                self.logger.warning("Screening analysis has no memory overlay")
             
             # Prepare context documents string
             context_docs_str = self._format_context_documents(context_documents)
@@ -104,10 +104,10 @@ class ScreeningAgent(BaseComplianceAgent):
             enhanced_result = self._enhance_result(result, state)
             
             # Log successful screening completion
-            self.logger.info(f"✓ Screening analysis completed for '{feature_name}'")
-            self.logger.info(f"✓ Risk level: {enhanced_result.get('compliance_risk_level', 'UNKNOWN')}")
-            self.logger.info(f"✓ Needs research: {enhanced_result.get('needs_research', True)}")
-            self.logger.info(f"✓ TikTok terminology used: {enhanced_result.get('tiktok_terminology_used', False)}")
+            self.logger.info(f"Screening analysis completed for '{feature_name}'")
+            self.logger.info(f"Risk level: {enhanced_result.get('compliance_risk_level', 'UNKNOWN')}")
+            self.logger.info(f"Needs research: {enhanced_result.get('needs_research', True)}")
+            self.logger.info(f"TikTok terminology used: {enhanced_result.get('tiktok_terminology_used', False)}")
             
             # Log interaction with enhanced context
             self.log_interaction(state, enhanced_result)
@@ -162,7 +162,7 @@ class ScreeningAgent(BaseComplianceAgent):
                     tiktok_terms = ["NR", "PF", "GH", "CDS", "DRT", "LCP", "Redline", "Softblock", "Spanner", "ShadowMode", "T5", "ASL", "Glow", "NSP", "Jellybean", "EchoTrace", "BB", "Snowcap", "FR", "IMT"]
                     found_terms = [term for term in tiktok_terms if term in content]
                     if found_terms:
-                        self.logger.info(f"✓ Context document contains TikTok terminology: {found_terms}")
+                        self.logger.info(f"Context document contains TikTok terminology: {found_terms}")
                     else:
                         self.logger.info("Context document contains no specific TikTok terminology")
                 
@@ -197,14 +197,14 @@ class ScreeningAgent(BaseComplianceAgent):
                 "agent": "ScreeningAgent",
                 "feature_name": feature_name,
                 "feature_description": feature_description,
-                "compliance_risk_level": result.get("compliance_risk_level", "UNKNOWN"),
+                "compliance_risk_level": result.get("risk_level", "UNKNOWN"),  # Changed from compliance_risk_level to risk_level
                 "needs_research": result.get("needs_research", True),
                 "trigger_keywords": result.get("trigger_keywords", []),
                 "geographic_scope": result.get("geographic_scope", []),
                 "data_sensitivity": result.get("data_sensitivity", "unknown"),
                 "age_sensitivity": result.get("age_sensitivity", False),
                 "reasoning": result.get("reasoning", ""),
-                "confidence_score": float(result.get("confidence_score", 0.0)),
+                "confidence_score": float(result.get("confidence", 0.0)),  # Changed from confidence_score to confidence
                 "tiktok_terminology_used": self._check_tiktok_terminology_usage(result),
                 "memory_overlay_length": len(self.memory_overlay) if self.memory_overlay else 0,
                 "screening_timestamp": datetime.now().isoformat()
@@ -242,14 +242,14 @@ class ScreeningAgent(BaseComplianceAgent):
         
         for pattern in tiktok_patterns:
             if pattern in result_text:
-                self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in screening result")
+                self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in screening result")
                 return True
         
         # Check reasoning field specifically
         reasoning = result.get("reasoning", "").lower()
         for pattern in tiktok_patterns:
             if pattern in reasoning:
-                self.logger.info(f"✓ TikTok terminology '{pattern.upper()}' detected in reasoning")
+                self.logger.info(f"TikTok terminology '{pattern.upper()}' detected in reasoning")
                 return True
         
         self.logger.info("No TikTok terminology detected in screening result")

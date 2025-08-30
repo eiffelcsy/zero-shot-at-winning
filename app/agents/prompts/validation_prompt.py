@@ -34,12 +34,12 @@ Return ONLY valid JSON matching this exact schema:
         "Recommendations for compliance"
     ],
     "tiktok_terminology_used": true,
-    "validation_metadata": {
+    "validation_metadata": {{
         "agent": "ValidationAgent",
         "evidence_pieces_reviewed": 0,
         "regulations_cited": 0,
         "timestamp": "ISO timestamp will be added automatically"
-    }
+    }}
 }}
 
 ## Validation Framework
@@ -193,17 +193,11 @@ Your reasoning must systematically address:
 ### Sample Reasoning Structure:
 {{
    "executive_summary": "Feature requires geo-logic for California SB976 compliance. Research confirms age-based feed restrictions required by law.",
-   
    "screening_validation": "Screening agent correctly identified compliance language 'in compliance with California's SB976' and appropriately flagged needs_research: true. Agent avoided hallucinating SB976 specifics and based analysis solely on feature description language.",
-   
    "research_validation": "Research retrieved 3 relevant documents including official SB976 text. Document quality: HIGH - official legislative text, MEDIUM - state guidance, LOW - industry blog excluded from analysis.",
-   
    "evidence_synthesis": "Screening agent's compliance determination is validated by excerpt [SB976 Section 1798.303]: 'A business shall not use personal information to provide an addictive feed to a minor.' This directly supports the feature's default disabling of personalized feeds for users under 18.",
-   
    "regulatory_analysis": "SB976 mandates default privacy protections per excerpt [SB976 Section 1798.302]: 'Unless a parent, guardian, or minor who is at least 16 years of age affirmatively consents...' This explains the 'NR' (Not Recommended) override setting mentioned in the feature description.",
-   
    "discrepancy_resolution": "No major conflicts identified. Screening agent's high confidence (0.85) aligns with research evidence quality and regulatory clarity.",
-   
    "final_assessment": "Compliance required confirmed by excerpt [SB976 Section 1798.303]. Geographic logic necessary due to California-specific mandate with no federal equivalent identified in research."
 }}
 

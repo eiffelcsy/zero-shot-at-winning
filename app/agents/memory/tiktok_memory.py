@@ -13,8 +13,10 @@ from typing import Any, Dict, List
 from langchain_core.memory import BaseMemory
 from typing_extensions import override
 
-from app.logs.logging_config import setup_logging, get_logger
+from logs.logging_config import setup_logging, get_logger, ensure_logging_setup, get_current_log_file
 
+# Ensure logging is set up before creating the logger
+ensure_logging_setup()
 logger = get_logger(__name__)
 
 class TikTokMemory(BaseMemory):
@@ -41,22 +43,31 @@ class TikTokMemory(BaseMemory):
         self._terminology_file = Path(terminology_file)
         self._memories = self._load_terminology()
         
+        # Log the current log file being used
+        current_log_file = get_current_log_file()
         logger.info(f"TikTokMemory initialized with {len(self._memories)} terminology entries")
+        logger.info(f"Logging to file: {current_log_file}")
     
     def _load_terminology(self) -> Dict[str, Any]:
         """
-        Load TikTok terminology from JSON file.
+        Load TikTok terminology from JSON file, with fallback to embedded data.
         
         Returns:
             Dictionary containing terminology data
         """
         try:
+            logger.info(f"Attempting to load terminology from: {self._terminology_file}")
+            
             if not self._terminology_file.exists():
                 logger.warning(f"Terminology file not found: {self._terminology_file}")
-                return {}
+                logger.info("Falling back to embedded terminology data")
+                return self._get_embedded_terminology()
             
+            # Try to read the JSON file
             with open(self._terminology_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            
+            logger.info(f"Successfully loaded {len(data.get('terminology', []))} terminology entries from JSON file")
             
             # Convert terminology to a more usable format
             terminology_dict = {}
@@ -72,12 +83,75 @@ class TikTokMemory(BaseMemory):
             # Add a comprehensive terminology reference
             terminology_dict["tiktok_terminology_reference"] = self._build_terminology_reference(data.get('terminology', []))
             
-            logger.info(f"Successfully loaded {len(data.get('terminology', []))} terminology entries")
+            logger.info(f"JSON file terminology loaded successfully")
             return terminology_dict
             
+        except PermissionError as e:
+            logger.warning(f"Permission denied accessing terminology file: {e}")
+            logger.info("This is likely a Docker container permission issue. Using embedded terminology as fallback.")
+            return self._get_embedded_terminology()
+        except FileNotFoundError as e:
+            logger.warning(f"Terminology file not found: {e}")
+            logger.info("Using embedded terminology as fallback.")
+            return self._get_embedded_terminology()
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in terminology file: {e}")
+            logger.info("Using embedded terminology as fallback.")
+            return self._get_embedded_terminology()
         except Exception as e:
-            logger.error(f"Failed to load terminology: {e}")
-            return {}
+            logger.error(f"Unexpected error loading terminology: {e}")
+            logger.info("Using embedded terminology as fallback.")
+            return self._get_embedded_terminology()
+    
+    def _get_embedded_terminology(self) -> Dict[str, Any]:
+        """
+        Get embedded terminology data as a fallback when JSON file cannot be accessed.
+        
+        Returns:
+            Dictionary containing embedded terminology data
+        """
+        logger.info("Loading embedded TikTok terminology data as fallback")
+        
+        # Embedded terminology data - always available
+        embedded_data = [
+            {"acronym": "NR", "meaning": "Not recommended (restriction/limitation level)", "category": "restriction"},
+            {"acronym": "PF", "meaning": "Personalized feed (recommendation algorithm)", "category": "algorithm"},
+            {"acronym": "GH", "meaning": "Geo-handler (region-based routing and enforcement)", "category": "geographic"},
+            {"acronym": "CDS", "meaning": "Compliance Detection System (automated compliance monitoring)", "category": "compliance"},
+            {"acronym": "DRT", "meaning": "Data retention threshold (how long data can be stored)", "category": "data"},
+            {"acronym": "LCP", "meaning": "Local compliance policy (region-specific rules)", "category": "compliance"},
+            {"acronym": "Redline", "meaning": "Flag for legal review (not financial loss context)", "category": "legal"},
+            {"acronym": "Softblock", "meaning": "Silent user limitation without notifications", "category": "user_management"},
+            {"acronym": "Spanner", "meaning": "Rule engine (not Google Spanner database)", "category": "system"},
+            {"acronym": "ShadowMode", "meaning": "Deploy feature without user impact for analytics collection", "category": "deployment"},
+            {"acronym": "T5", "meaning": "Tier 5 data (highest sensitivity level - more critical than T1-T4)", "category": "data_sensitivity"},
+            {"acronym": "ASL", "meaning": "Age-sensitive logic (age verification/restrictions for minors)", "category": "age_verification"},
+            {"acronym": "Glow", "meaning": "Compliance-flagging status for geo-based alerts", "category": "compliance"},
+            {"acronym": "NSP", "meaning": "Non-shareable policy (content sharing restrictions)", "category": "content"},
+            {"acronym": "Jellybean", "meaning": "Internal parental control system", "category": "parental_controls"},
+            {"acronym": "EchoTrace", "meaning": "Log tracing mode for compliance verification", "category": "logging"},
+            {"acronym": "BB", "meaning": "Baseline Behavior (standard user behavior for anomaly detection)", "category": "behavior"},
+            {"acronym": "Snowcap", "meaning": "Child safety policy framework", "category": "child_safety"},
+            {"acronym": "FR", "meaning": "Feature rollout status", "category": "deployment"},
+            {"acronym": "IMT", "meaning": "Internal monitoring trigger", "category": "monitoring"}
+        ]
+        
+        # Convert terminology to a more usable format
+        terminology_dict = {}
+        for item in embedded_data:
+            acronym = item.get('acronym', '')
+            if acronym:
+                terminology_dict[f"tiktok_{acronym.lower()}"] = {
+                    "acronym": acronym,
+                    "meaning": item.get('meaning', ''),
+                    "category": item.get('category', '')
+                }
+        
+        # Add a comprehensive terminology reference
+        terminology_dict["tiktok_terminology_reference"] = self._build_terminology_reference(embedded_data)
+        
+        logger.info(f"Successfully loaded {len(embedded_data)} embedded terminology entries as fallback")
+        return terminology_dict
     
     def _build_terminology_reference(self, terminology: List[Dict[str, Any]]) -> str:
         """
@@ -197,9 +271,14 @@ class TikTokMemory(BaseMemory):
 def initialize_tiktok_system():
     """Initialize the complete TikTok compliance system with proper memory overlays."""
     
-    # Set up logging
+    # Ensure logging is set up and get current log file info
+    ensure_logging_setup()
+    current_log_file = get_current_log_file()
+    
+    # Set up logging with enhanced configuration
     logger = setup_logging(log_level="INFO")
     logger.info("=== Initializing TikTok Compliance System ===")
+    logger.info(f"Logging to file: {current_log_file}")
     
     try:
         # 1. Initialize TikTok memory
@@ -270,11 +349,17 @@ def initialize_tiktok_system():
         preview = screening_overlay[:300] + "..." if len(screening_overlay) > 300 else screening_overlay
         logger.info(preview)
         
+        # 7. Log final status
+        logger.info("=== SYSTEM INITIALIZATION COMPLETE ===")
+        logger.info(f"All logs are being saved to: {current_log_file}")
+        logger.info("TikTok terminology context is available to all agents")
+        
         return {
             "tiktok_memory": tiktok_memory,
             "screening_overlay": screening_overlay,
             "research_overlay": research_overlay,
-            "validation_overlay": validation_overlay
+            "validation_overlay": validation_overlay,
+            "log_file": current_log_file
         }
         
     except Exception as e:
@@ -292,8 +377,12 @@ def _build_agent_overlay(tiktok_memory: TikTokMemory, agent_type: str) -> str:
     Returns:
         Formatted memory overlay string
     """
+    logger.info(f"Building agent overlay for {agent_type} agent")
+    
     # Get the terminology reference
     terminology_ref = tiktok_memory.get_terminology_summary()
+    logger.info(f"Terminology reference length: {len(terminology_ref)} characters")
+    logger.info(f"Terminology reference contains 'TIKTOK TERMINOLOGY REFERENCE': {'TIKTOK TERMINOLOGY REFERENCE' in terminology_ref}")
     
     # Build agent-specific overlay
     overlay = f"""MEMORY OVERLAY FOR {agent_type.upper()} AGENT
@@ -310,27 +399,64 @@ This overlay provides the {agent_type} agent with access to all TikTok terminolo
 and compliance context needed for proper operation.
 """
     
+    logger.info(f"Generated overlay for {agent_type} agent: {len(overlay)} characters")
+    logger.info(f"Overlay contains 'TIKTOK TERMINOLOGY REFERENCE': {'TIKTOK TERMINOLOGY REFERENCE' in overlay}")
+    
     return overlay
 
 def get_agent_overlays():
     """Get the memory overlays for each agent type."""
     try:
-        tiktok_memory = TikTokMemory()
+        logger.info("=== Getting Agent Overlays ===")
         
-        return {
+        # Ensure logging is set up
+        ensure_logging_setup()
+        
+        tiktok_memory = TikTokMemory()
+        logger.info(f"TikTokMemory created with {len(tiktok_memory.memory_variables)} variables")
+        
+        # Check if TikTok terminology reference is present
+        if "tiktok_terminology_reference" in tiktok_memory.memory_variables:
+            logger.info("TikTok terminology reference found in memory variables")
+            ref_content = tiktok_memory.get_terminology_summary()
+            logger.info(f"Reference content length: {len(ref_content)} characters")
+            logger.info(f"Reference contains 'TIKTOK TERMINOLOGY REFERENCE': {'TIKTOK TERMINOLOGY REFERENCE' in ref_content}")
+        else:
+            logger.error("TikTok terminology reference NOT found in memory variables")
+            logger.error(f"Available variables: {list(tiktok_memory.memory_variables.keys())}")
+        
+        overlays = {
             "screening": _build_agent_overlay(tiktok_memory, "screening"),
             "research": _build_agent_overlay(tiktok_memory, "research"),
             "validation": _build_agent_overlay(tiktok_memory, "validation")
         }
+        
+        # Log the overlay generation
+        logger.info(f"Generated {len(overlays)} agent overlays")
+        for agent_type, overlay in overlays.items():
+            logger.info(f"  - {agent_type}: {len(overlay)} characters")
+            logger.info(f"    Contains 'TIKTOK TERMINOLOGY REFERENCE': {'TIKTOK TERMINOLOGY REFERENCE' in overlay}")
+        
+        return overlays
+        
     except Exception as e:
-        logger = get_logger(__name__)
         logger.error(f"Failed to get agent overlays: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {}
 
 def get_tiktok_memory():
     """Get a TikTokMemory instance."""
     try:
-        return TikTokMemory()
+        # Ensure logging is set up
+        ensure_logging_setup()
+        
+        memory = TikTokMemory()
+        logger = get_logger(__name__)
+        logger.info("TikTokMemory instance created successfully")
+        
+        return memory
+        
     except Exception as e:
         logger = get_logger(__name__)
         logger.error(f"Failed to get TikTok memory: {e}")
@@ -342,15 +468,20 @@ def get_tiktok_memory():
 
 if __name__ == "__main__":
     try:
+        print("=== TikTok Compliance System Initialization ===")
+        print("Setting up logging and memory system...")
+        
         result = initialize_tiktok_system()
         
         print("\n=== SYSTEM READY ===")
+        print(f"Log file: {result.get('log_file', 'Unknown')}")
         print("To use in your application:")
         print("1. Import: from app.agents.memory.tiktok_memory import TikTokMemory, get_agent_overlays, get_tiktok_memory")
         print("2. Get overlays: overlays = get_agent_overlays()")
         print("3. Get memory: memory = get_tiktok_memory()")
         print("4. Initialize orchestrator: orchestrator = ComplianceOrchestrator(memory=memory)")
         print("\nAll agents will now have access to TikTok terminology context!")
+        print("All application logs are being saved to log files.")
         
     except Exception as e:
         print(f"System initialization failed: {e}")
