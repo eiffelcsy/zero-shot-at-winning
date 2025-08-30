@@ -7,6 +7,7 @@ from datetime import datetime
 from rag.ingestion.pipeline import PDFIngestionPipeline
 from chroma.chroma_connection import get_chroma_collection
 from agents.orchestrator import ComplianceOrchestrator
+from agents.feedback.learning import LearningAgent
 import os
 import io
 
@@ -51,6 +52,20 @@ class ComplianceResponse(BaseModel):
     confidence_score: Optional[float] = Field(default=None, description="Overall confidence score")
     
     error: Optional[str] = Field(default=None, description="Error message if analysis failed")
+
+class FeedbackRequest(BaseModel):
+    analysis_id: str
+    feedback_type: Literal["positive", "negative", "needs_context"]
+    feedback_text: Optional[str] = ""
+    correction_data: Optional[CorrectionData] = None
+    timestamp: Optional[str] = None
+    state: Dict[str, Any]  # Full current state object from the client
+
+class FeedbackResponse(BaseModel):
+    status: Literal["success", "error"]
+    message: str
+    analysis_id: str
+    learning_report: Optional[Dict[str, Any]] = None
 
 # Log API router initialization
 logger.info("=== Initializing API Router ===")
@@ -272,29 +287,59 @@ async def check_compliance(
         raise HTTPException(status_code=500, detail=f"Compliance analysis failed: {str(e)}")
 
 
-# @router.post("/compliance/feedback", response_model=FeedbackResponse)
-# async def submit_feedback(feedback: FeedbackRequest):
-#     """
-#     Submit feedback for a compliance analysis
+@router.post("/compliance/feedback", response_model=FeedbackResponse)
+async def submit_feedback(feedback: FeedbackRequest):
+    # """
+    # Submit feedback for a compliance analysis
     
-#     Args:
-#         feedback: FeedbackRequest containing analysis_id, feedback_type, etc.
+    # Args:
+    #     feedback: FeedbackRequest containing analysis_id, feedback_type, etc.
     
-#     Returns:
-#         FeedbackResponse confirming submission
-#     """
-#     try:
-#         logger.info(f"Receiving feedback for analysis: {feedback.analysis_id}")
+    # Returns:
+    #     FeedbackResponse confirming submission
+    # """
+    # try:
+    #     logger.info(f"Receiving feedback for analysis: {feedback.analysis_id}")
         
-#         # Process feedback and store for agent learning
-#         feedback_result = await process_feedback(feedback)
+    #     # Process feedback and store for agent learning
+    #     feedback_result = await process_feedback(feedback)
         
-#         logger.info(f"Feedback processed successfully for analysis: {feedback.analysis_id}")
-#         return feedback_result
+    #     logger.info(f"Feedback processed successfully for analysis: {feedback.analysis_id}")
+    #     return feedback_result
         
-#     except Exception as e:
-#         logger.error(f"Error processing feedback: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
+    # except Exception as e:
+    #     logger.error(f"Error processing feedback: {str(e)}")
+    #     raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
+    """
+    Accepts client-side snapshot state + feedback; applies LearningAgent updates.
+    """
+    try:
+        logger.info(f"Feedback received: analysis_id={feedback.analysis_id}, type={feedback.feedback_type}")
+
+        # Basic validation
+        if not feedback.state:
+            raise HTTPException(status_code=400, detail="Missing `state` in request body.")
+
+        # Build LearningAgent input from request
+        la_state = build_learning_state_from_request(feedback)
+
+        # Run learning
+        agent = LearningAgent()  # reads PG_CONN_STRING, writes Postgres + JSONLs
+        learning_result = await agent.process(la_state)
+
+        logger.info(f"Learning applied for analysis_id={feedback.analysis_id}")
+        return FeedbackResponse(
+            status="success",
+            message="Feedback applied; memory updated.",
+            analysis_id=feedback.analysis_id,
+            learning_report=learning_result.get("learning_report"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Feedback processing failed")
+        raise HTTPException(status_code=500, detail=f"Feedback processing failed: {e}")
 
 
 # # ================================================
@@ -898,3 +943,67 @@ async def run_compliance_analysis(
 #         ],
 #         "timestamp": datetime.now().isoformat()
 #     }
+
+def to_learning_user_feedback(req: FeedbackRequest) -> Dict[str, Any]:
+    """
+    Map API feedback to LearningAgent's expected:
+      {"is_correct": "yes"|"no", "notes": "..."}
+    """
+    # default
+    is_correct = "yes" if req.feedback_type == "positive" else "no"
+
+    # If caller provided a corrected flag, respect it (e.g., "yes"/"no"/"true"/"false")
+    cf = (req.correction_data.correct_flag.lower()
+          if req.correction_data and req.correction_data.correct_flag
+          else "")
+    if cf in {"yes", "true"}:
+        is_correct = "yes"
+    elif cf in {"no", "false"}:
+        is_correct = "no"
+
+    # Build notes: include feedback_text + corrections delta (if any)
+    notes_parts = []
+    if req.feedback_text:
+        notes_parts.append(req.feedback_text.strip())
+
+    if req.correction_data:
+        deltas = []
+        if req.correction_data.original_result:
+            orig = req.correction_data.original_result
+            if orig.flag or req.correction_data.correct_flag:
+                deltas.append(f'flag: {orig.flag or "?"} -> {req.correction_data.correct_flag or "?"}')
+            if orig.risk_level or req.correction_data.correct_risk_level:
+                deltas.append(f'risk_level: {orig.risk_level or "?"} -> {req.correction_data.correct_risk_level or "?"}')
+        if deltas:
+            notes_parts.append("Corrections: " + "; ".join(deltas))
+
+    # If “needs_context”, we still return is_correct="no" but annotate reason
+    if req.feedback_type == "needs_context":
+        notes_parts.append("User indicates missing context the system should consider.")
+
+    return {
+        "is_correct": is_correct,
+        "notes": " ".join(p for p in notes_parts if p)
+    }
+
+
+def build_learning_state_from_request(req: FeedbackRequest) -> Dict[str, Any]:
+    """
+    Extract the pieces LearningAgent expects from the provided state object.
+      Required keys for LearningAgent:
+        - feature_name
+        - feature_description
+        - screening_analysis (dict)
+        - research_analysis (dict)
+        - validation_analysis (dict using the NEW ValidationOutput schema)
+        - user_feedback (normalized)
+    """
+    s = req.state or {}
+    return {
+        "feature_name": s.get("feature_name", ""),
+        "feature_description": s.get("feature_description", ""),
+        "screening_analysis": s.get("screening_analysis", {}) or {},
+        "research_analysis": s.get("research_analysis", {}) or {},
+        "validation_analysis": s.get("validation_analysis", {}) or {},
+        "user_feedback": to_learning_user_feedback(req),
+    }
