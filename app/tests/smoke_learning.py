@@ -65,6 +65,7 @@ def build_fake_state():
     return {
         "feature_name": "Teen Location Sharing",
         "feature_description": "Under-18 users can share precise location with guardians.",
+
         "screening_analysis": {
             "agent": "ScreeningAgent",
             "risk_level": "HIGH",
@@ -73,36 +74,48 @@ def build_fake_state():
             "data_sensitivity": "T5",
             "reasoning": "Precise location for minors triggers COPPA concerns."
         },
-        "research_evidence": [
-            {
-                "jurisdiction": "US",
-                "name": "Children's Online Privacy Protection Rule (COPPA)",
-                "section": "16 CFR Part 312",
-                "url": "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa",
-                "excerpt": "Verifiable parental consent required before collecting personal information from children under 13."
-            }
-        ],
-        "final_decision": {
-            "agent": "ValidationAgent",
-            "needs_geo_logic": "YES",
-            "reasoning": "Feature targets minors; COPPA + state privacy laws likely apply.",
-            "related_regulations": [
+
+        # LearningAgent now reads research_analysis (dict), not research_evidence (list)
+        "research_analysis": {
+            "regulations": [
                 {
-                    "name": "COPPA",
                     "jurisdiction": "US",
+                    "name": "Children's Online Privacy Protection Rule (COPPA)",
                     "section": "16 CFR Part 312",
                     "url": "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa",
-                    "evidence_excerpt": "Parental consent required."
+                    "excerpt": "Verifiable parental consent required before collecting personal information from children under 13."
                 }
-            ],
-            "confidence": 0.78
+            ]
         },
-        # user feedback the LearningAgent should learn from:
+
+        # NEW ValidationOutput schema expected under `validation_analysis`
+        "validation_analysis": {
+            "agent": "ValidationAgent",
+            "feature_name": "Teen Location Sharing",
+            "final_decision": "NEEDS_REVIEW",  # COMPLIANT | NON_COMPLIANT | NEEDS_REVIEW
+            "confidence_score": 0.78,
+            "reasoning": "Initial assessment considers COPPA implications; additional state-specific requirements may apply.",
+            "compliance_requirements": [
+                "Obtain verifiable parental consent for users under 13",
+                "Provide data minimization and retention limits",
+                "Offer guardian dashboard for consent and revocation"
+            ],
+            "risk_assessment": "High risk due to precise geolocation of minors and cross-jurisdictional constraints.",
+            "recommendations": [
+                "Add California under-16 opt-in logic",
+                "Gate precise location behind verified guardian consent",
+                "Log consent events and provide audit exports"
+            ],
+            "tiktok_terminology_used": False
+        },
+
+        # User feedback the LearningAgent should learn from
         "user_feedback": {
             "is_correct": "no",
             "notes": "Decision ignored California-specific requirements (e.g., under-16 opt-in). Please add CA coverage and improve examples."
         }
     }
+
 
 # ---------- main ----------
 
