@@ -330,12 +330,28 @@ if page == "Compliance Checker":
                 # Related Regulations
                 if validation_result.get("related_regulations"):
                     st.markdown("#### Related Regulations")
+                    
+                    # Group regulations by name
+                    regulations_by_name = {}
                     for reg in validation_result["related_regulations"]:
-                        with st.expander(f"{reg['regulation_name']}", expanded=False):
-                            st.markdown(f"**Excerpt:**")
-                            st.markdown(f"_{reg['excerpt']}_")
-                            st.markdown(f"**Relevance Score:** {reg['relevance_score']:.2%}")
-                            st.markdown(f"**Source:** {reg['source_filename']}")
+                        reg_name = reg["regulation_name"]
+                        if reg_name not in regulations_by_name:
+                            regulations_by_name[reg_name] = []
+                        regulations_by_name[reg_name].append(reg)
+                    
+                    # Display grouped regulations
+                    for reg_name, excerpts in regulations_by_name.items():
+                        with st.expander(f"{reg_name}", expanded=False):
+                            for idx, excerpt in enumerate(excerpts, 1):
+                                if len(excerpts) > 1:
+                                    st.markdown(f"**Excerpt {idx}:**")
+                                else:
+                                    st.markdown("**Excerpt:**")
+                                st.markdown(f"_{excerpt['excerpt']}_")
+                                st.markdown(f"**Relevance Score:** {excerpt['relevance_score']:.2%}")
+                                st.markdown(f"**Source:** {excerpt['source_filename']}")
+                                if idx < len(excerpts):  # Add separator between excerpts
+                                    st.markdown("---")
         
         # Technical details in collapsed section
         with st.expander("Analysis Metadata", expanded=False):
