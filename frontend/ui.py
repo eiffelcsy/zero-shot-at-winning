@@ -19,7 +19,7 @@ def load_css(file_name):
 
 # Try to load external CSS, fallback to inline if not found
 try:
-    load_css('frontend/static/styles.css')
+    load_css('static/styles.css')
 except FileNotFoundError:
     st.warning("External CSS file not found. Using inline styles.")
     # Add minimal inline CSS for basic functionality
