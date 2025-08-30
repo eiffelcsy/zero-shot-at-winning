@@ -13,7 +13,7 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 **Outputs:**
 - Flag for geo-specific compliance requirement
 - Human-readable reasoning
-- Optional: related regulations
+- Related regulations (optional)
 
 ## Key Features
 - **Automated Screening** – Detects whether a feature requires region-specific compliance logic.
@@ -24,11 +24,11 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 - **Audit-Ready Evidence** – Generates outputs suitable for legal review and regulatory inquiries.
 
 ## Tech Stack
-- **Backend:** Python 3.11+, FastAPI, LangChain, SQLAlchemy, Celery
-- **LLM Integration:** OpenAI GPT-4 / Anthropic Claude with LangChain orchestration
+- **Backend:** Python 3.11+, FastAPI, LangChain
+- **LLM Integration:** OpenAI GPT-4 with LangChain orchestration
 - **Vector Database:** ChromaDB
 - **Frontend:** Streamlit
-- **Infrastructure:** Docker, Docker Compose, Redis, PostgreSQL
+- **Infrastructure:** Docker, Docker Compose, PostgreSQL
 
 ## Installation & Setup
 
@@ -60,7 +60,7 @@ streamlit run frontend/ui.py
 See docs/ARCHITECTURE.md for full details.
  
 ## Demo Video
-Watch our 3-minute demo: YouTube Link
+Watch our 3-minute demo: [YouTube Link](https://youtube.com)
 
 ## Focused Regulations
 - EU Digital Service Act (DSA)
