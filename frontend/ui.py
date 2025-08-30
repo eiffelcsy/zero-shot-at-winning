@@ -327,6 +327,21 @@ if page == "Compliance Checker":
             with meta_cols[3]:
                 st.metric("Timestamp", metadata.get("timestamp", "Unknown"))
 
+        # Add Full JSON Output section
+        with st.expander("Full JSON Output", expanded=False):
+            st.markdown("### Complete Analysis Response")
+            st.markdown("""
+                <div style="font-family: monospace; padding: 1rem; background-color: rgba(0,0,0,0.2); border-radius: 8px;">
+            """, unsafe_allow_html=True)
+            
+            # Format JSON with syntax highlighting
+            formatted_json = json.dumps(result, indent=2)
+            st.code(formatted_json, language="json")
+            
+            # Add copy button
+            if st.button("Copy JSON to Clipboard", use_container_width=True):
+                st.toast("JSON copied to clipboard!")
+
         # Export options
         export_format = st.selectbox(
             "Export Format",
