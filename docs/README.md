@@ -15,24 +15,17 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 - Human-readable reasoning
 - Optional: related regulations
 
-**Example:**
-
-| Feature Artifact | Flag | Notes |
-|-----------------|------|-------|
-| Reads user location to enforce France's copyright rules | ✅ | Legal compliance needed |
-| Age gates for Indonesia’s Child Protection Law | ✅ | Legal compliance needed |
-| Geofences feature rollout in US for market testing | ❌ | Business-driven, not legal |
-| Video filter available globally except KR | ❓ | Requires human evaluation |
-
 ## Key Features
-- **LLM-based Classification**: Analyzes feature artifacts to detect compliance needs
-- **Automated Reasoning**: Provides human-readable explanations
-- **Audit-Ready Outputs**: CSVs with compliance flags for regulatory review
-- **Extensible Architecture**: Supports adding domain-specific knowledge or alternative detection methods
+- **Automated Screening** – Detects whether a feature requires region-specific compliance logic.
+- **Explainable AI** – Produces clear reasoning, risk level, and related regulation references.
+- **Multi-Agent Workflow** – Screening, Research, Validation, and Learning agents collaborate to improve accuracy.
+- **Feedback Loop** – Human feedback continuously enhances the system’s precision.
+- **Document Ingestion** – Upload PDFs of regulations, which are chunked, embedded, and stored for retrieval via ChromaDB.
+- **Audit-Ready Evidence** – Generates outputs suitable for legal review and regulatory inquiries.
 
 ## Tech Stack
 - **Backend:** Python 3.11+, FastAPI, LangChain, SQLAlchemy, Celery
-- **LLM Integration:** OpenAI GPT-4 
+- **LLM Integration:** OpenAI GPT-4 / Anthropic Claude with LangChain orchestration
 - **Vector Database:** ChromaDB
 - **Frontend:** Streamlit
 - **Infrastructure:** Docker, Docker Compose, Redis, PostgreSQL
@@ -45,7 +38,7 @@ git clone https://github.com/yourusername/zero-shot-at-winning.git
 cd zero-shot-at-winning
 ```
 2. Environment Setup
-3. Copy .env.example into .env and configure API keys:
+Copy .env.example into .env and configure API keys:
 ```bash
 cp .env.example .env
 ```
@@ -53,7 +46,7 @@ cp .env.example .env
 ```bash
 pip install -r requirements.txt
 ```
-5. Build and run with Docker Compose:
+4. Build and run with Docker Compose:
 ```bash
 docker compose build
 docker compose up
