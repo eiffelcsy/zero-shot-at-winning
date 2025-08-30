@@ -48,9 +48,6 @@ class QueryProcessor:
             return [query]
         
         try:
-            # Enhanced logging for query expansion debugging
-            logger.info(f"Expanding query: '{query}' (length: {len(query)} characters, {len(query.split())} words)")
-            
             # Create a prompt for query expansion focused on compliance/regulatory context
             expansion_prompt = f"""
 You are helping to expand a compliance and regulatory query for better document retrieval.
@@ -72,10 +69,6 @@ Provide only the 5 most relevant additional terms as a comma-separated list, wit
             # Parse the comma-separated response into a list
             all_queries = self._parse_comma_separated_list(expansion_response.content)
             
-            # Enhanced logging of expansion results
-            logger.info(f"Query expansion generated {len(all_queries)} queries")
-            logger.info(f"Raw expansion response: {expansion_response.content[:200]}...")
-            
             # Remove duplicates while preserving order
             unique_queries = []
             seen = set()
@@ -84,11 +77,6 @@ Provide only the 5 most relevant additional terms as a comma-separated list, wit
                 if q_clean and q_clean.lower() not in seen:
                     unique_queries.append(q_clean)
                     seen.add(q_clean.lower())
-            
-            # Enhanced logging of final queries
-            logger.info(f"Final unique queries: {unique_queries}")
-            for i, q in enumerate(unique_queries):
-                logger.info(f"  Query {i+1}: '{q}' ({len(q)} characters)")
             
             return unique_queries
             
