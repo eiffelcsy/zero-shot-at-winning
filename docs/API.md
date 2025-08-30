@@ -12,14 +12,7 @@ This API provides endpoints for automated geo-regulation compliance analysis usi
   - `POST /compliance/feedback` - Supports positive, negative, and context feedback types
 - **Upload Endpoints**
   - `POST /upload-pdfs` - Batch PDF processing with detailed results
-  - `GET /upload-stats` - Pipeline configuration and storage statistics
   - `DELETE /clear-documents` - Clear all documents from the ChromaDB collection
-- **Analytics Endpoints**
-  - `GET /analytics/summary` - Comprehensive system analytics
-  - `GET /analytics/history` - Paginated history with filtering
-- **Admin Endpoints**
-  - `GET /admin/system-status` - Multi-component health monitoring
-  - `POST /admin/retrain-agents` - Agent retraining initiation
 
 ---
 
@@ -242,31 +235,7 @@ curl -X POST "http://localhost:8000/api/v1/upload-pdfs" \
 }
 ```
 
-### 4. Get Upload Pipeline Statistics
-**Endpoint:** `GET /upload-stats`
-
-**Description:** Retrieve statistics about the PDF upload pipeline and ChromaDB storage.
-
-**Success Response Example:**
-```bash
-{
-  "pipeline_config": {
-    "chunk_size": 1000,
-    "chunk_overlap": 200,
-    "embedding_model": "text-embedding-3-large",
-    "collection_name": "regulation_kb"
-  },
-  "storage_stats": {
-    "total_documents": 156,
-    "total_chunks": 8934,
-    "collection_size_mb": 45.2,
-    "last_updated": "2024-08-28T10:30:00Z"
-  },
-  "status": "active"
-}
-```
-
-### 5. Clear Document Collection
+### 4. Clear Document Collection
 **Endpoint:** `DELETE /clear-documents`
 
 **Description:** Permanently delete all documents from ChromaDB.
@@ -279,98 +248,5 @@ curl -X POST "http://localhost:8000/api/v1/upload-pdfs" \
   "documents_deleted": 156,
   "chunks_deleted": 8934,
   "timestamp": "2024-08-28T10:30:00Z"
-}
-```
-
-### 6. Get Analytics Summary
-**Endpoint:** `GET /analytics/summary`
-
-**Description:** Retrieve summary analytics about compliance analyses.
-
-**Success Responese Example:**
-```bash
-{
-  "total_analyses": 245,
-  "flagged_analyses": 89,
-  "flagged_percentage": 36.3,
-  "average_confidence": 0.847,
-  "risk_distribution": {"low": 156, "medium": 67, "high": 22},
-  "feedback_stats": {"positive_feedback": 198, "negative_feedback": 23, "context_requests": 24},
-  "trends": {"analyses_this_week": 47, "trend_direction": "increasing", "accuracy_improvement": 0.12},
-  "timestamp": "2025-01-15T14:50:22.123Z"
-}
-```
-
-### 7. Get Analysis History
-**Endpoint:** `GET /analytics/history`
-
-**Description:** Paginated historical compliance analyses with optional filtering.
-
-**Parameters:**
-| Parameter       | Type    | Required | Default | Description              |
-| --------------- | ------- | -------- | ------- | ------------------------ |
-| limit           | integer | No       | 100     | Max records              |
-| offset          | integer | No       | 0       | Records to skip          |
-| filter\_flagged | boolean | No       | null    | Filter by flagged status |
-
-**Example Request:**
-```bash
-curl -X GET "http://localhost:8000/api/v1/analytics/history?limit=50&filter_flagged=true"
-```
-**Response Schema:**
-```bash
-[
-  {
-    "analysis_id": "string",
-    "timestamp": "string",
-    "title": "string",
-    "description": "string",
-    "flag": "string",
-    "confidence": 0.0,
-    "risk_level": "string",
-    "has_feedback": false
-  }
-]
-```
-### 8. Get System Status
-**Endpoint:** `GET /admin/system-status`
-
-**Description:** Retrieve comprehensive system health status including component checks.
-
-**Success Response Example:**
-```bash
-{
-  "status": "healthy",
-  "components": {
-    "database": {"status": "healthy","response_time_ms": 45,"last_check": "2025-01-15T14:55:00.000Z"},
-    "vector_database": {"status": "healthy","collection_count": 1,"document_count": 156,"last_check": "2025-01-15T14:55:00.000Z"},
-    "llm_agents": {"status": "healthy","screening_agent": "ready","research_agent": "ready","validation_agent": "ready","last_check": "2025-01-15T14:55:00.000Z"},
-    "external_apis": {"status": "healthy","regulation_apis": "accessible","last_check": "2025-01-15T14:55:00.000Z"}
-  },
-  "uptime_seconds": 86400,
-  "version": "1.0.0",
-  "timestamp": "2025-01-15T14:55:22.123Z"
-}
-```
-
-### 9. Trigger Agent Retraining
-**Endpoint:** `POST /admin/retrain-agents`
-
-**Description:** Initiate retraining of compliance agents.
-
-**Success Response Example:**
-```bash
-{
-  "status": "success",
-  "message": "Agent retraining process started successfully",
-  "data": {
-    "retraining_id": "retraining_uuid_12345",
-    "status": "initiated",
-    "feedback_samples": 47,
-    "estimated_completion": "2025-01-15T16:30:00.000Z",
-    "agents_affected": ["screening_agent","research_agent","validation_agent"],
-    "timestamp": "2025-01-15T15:00:00.000Z"
-  },
-  "timestamp": "2025-01-15T15:00:22.123Z"
 }
 ```
