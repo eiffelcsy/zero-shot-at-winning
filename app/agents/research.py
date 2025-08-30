@@ -225,6 +225,7 @@ class ResearchAgent(BaseComplianceAgent):
                     "retrieved_documents": retrieved_documents["raw_results"]
                 },
                 "research_completed": True,
+                "workflow_completed": False,
                 "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
             }

@@ -80,6 +80,58 @@ class ComplianceOrchestrator:
         else:
             return END
     
+    def _calculate_final_confidence(self, 
+                                    screening_analysis: Dict, 
+                                    research_analysis: Dict, 
+                                    validation_analysis: Dict) -> float:
+        """
+        Calculate final confidence score using a weighted formula combining all agents.
+        
+        Formula:
+        - Screening: 30% weight (initial assessment quality)
+        - Research: 40% weight (evidence quality and quantity)
+        - Validation: 30% weight (final decision confidence)
+        """
+        try:
+            # Extract individual confidence scores
+            screening_confidence = float(screening_analysis.get("confidence_score", 0.0))
+            research_confidence = float(research_analysis.get("confidence_score", 0.0))
+            validation_confidence = float(validation_analysis.get("confidence_score", 0.0)) if validation_analysis else 0.0
+            
+            # Calculate weighted final confidence
+            final_confidence = (
+                (screening_confidence * 0.3) +    # 30% weight
+                (research_confidence * 0.4) +     # 40% weight
+                (validation_confidence * 0.3)     # 30% weight
+            )
+            
+            # Log the calculation
+            self.logger.info(f"Final confidence calculation:")
+            self.logger.info(f"  Screening: {screening_confidence:.3f} × 0.3 = {screening_confidence * 0.3:.3f}")
+            self.logger.info(f"  Research: {research_confidence:.3f} × 0.4 = {research_confidence * 0.4:.3f}")
+            self.logger.info(f"  Validation: {validation_confidence:.3f} × 0.3 = {validation_confidence * 0.3:.3f}")
+            self.logger.info(f"  Final: {final_confidence:.3f}")
+            
+            return min(max(final_confidence, 0.0), 1.0)  # Ensure between 0.0 and 1.0
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating final confidence: {e}")
+            # Fallback to average of available scores
+            available_scores = []
+            if screening_analysis:
+                available_scores.append(float(screening_analysis.get("confidence_score", 0.0)))
+            if research_analysis:
+                available_scores.append(float(research_analysis.get("confidence_score", 0.0)))
+            if validation_analysis:
+                available_scores.append(float(validation_analysis.get("confidence_score", 0.0)))
+            
+            if available_scores:
+                fallback_confidence = sum(available_scores) / len(available_scores)
+                self.logger.info(f"Using fallback confidence: {fallback_confidence:.3f}")
+                return fallback_confidence
+            else:
+                return 0.0
+    
     async def analyze_feature(self, 
                             feature_name: str, 
                             feature_description: str, 
@@ -97,6 +149,8 @@ class ComplianceOrchestrator:
         try:
             # Execute workflow
             final_state = await self.workflow.ainvoke(initial_state)
+            self.logger.info(f"Final state keys: {list(final_state.keys())}")
+            self.logger.info(f"Final state: {final_state}")
             
             # Extract and format final result
             screening_analysis = final_state.get("screening_analysis", {})
@@ -116,13 +170,18 @@ class ComplianceOrchestrator:
             if validation_analysis:
                 needs_geo_logic = validation_analysis.get("needs_geo_logic", "UNKNOWN")
                 reasoning = validation_analysis.get("reasoning", "")
-                confidence_score = validation_analysis.get("confidence_score", 0.0)
                 related_regulations = validation_analysis.get("related_regulations", [])
             else:
                 needs_geo_logic = screening_analysis.get("compliance_required", "UNKNOWN")
                 reasoning = screening_analysis.get("reasoning", "")
-                confidence_score = screening_analysis.get("confidence_score", 0.0)
                 related_regulations = []
+
+            # Calculate final confidence using formula
+            confidence_score = self._calculate_final_confidence(
+                screening_analysis, 
+                research_analysis, 
+                validation_analysis
+            )
             
             # Extract jurisdictions from research results
             applicable_jurisdictions = []

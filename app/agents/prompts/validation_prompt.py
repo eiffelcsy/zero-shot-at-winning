@@ -42,7 +42,7 @@ Return ONLY valid JSON matching this exact schema:
             "source_filename": "source filename from research analysis"
         }}
     ],
-    "confidence": 0.0-1.0,
+    "confidence_score": 0.0-1.0,  # ← Changed from "confidence" to "confidence_score"
     "agent": "ValidationAgent",
     "validation_metadata": {{
         "agent": "ValidationAgent",
@@ -51,7 +51,6 @@ Return ONLY valid JSON matching this exact schema:
         "timestamp": "ISO timestamp will be added automatically"
     }}
 }}
-
 ## Validation Framework
 
 ### 1. Screening Analysis Validation

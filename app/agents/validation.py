@@ -20,7 +20,7 @@ class ValidationOutput(BaseModel):
     reasoning: str = Field(description="Reasoning for the final verdict, substantive, supported by the evidence from the screening and research analyses")
     validation_reasoning: Dict[str, Any] = Field(description="Validation reasoning")
     related_regulations: List[RelatedRegulation] = Field(description="Related regulations")
-    confidence: float = Field(description="Confidence score")
+    confidence_score: float = Field(description="Confidence score")
     agent: str = Field(description="Agent name")
     validation_metadata: Dict[str, Any] = Field(description="Validation metadata")
 
@@ -125,6 +125,7 @@ class ValidationAgent(BaseComplianceAgent):
             return {
                 "validation_analysis": enhanced_result,
                 "validation_completed": True,
+                "workflow_completed": True,
                 "validation_timestamp": datetime.now().isoformat(),
                 "next_step": "complete"
             }
@@ -133,18 +134,15 @@ class ValidationAgent(BaseComplianceAgent):
             self.log_error(e, state, "Validation agent process failed")
             return {
                 "validation_analysis": {
-                    "needs_geo_logic": "ERROR",
+                    "agent": "ValidationAgent",
                     "error": str(e),
                     "feature_name": state.get("feature_name", "unknown"),
-                    "confidence": 0.0,
+                    "confidence_score": 0.0,
                     "reasoning": f"Validation failed due to error: {str(e)}",
                     "validation_reasoning": {},
                     "related_regulations": [],
                     "validation_metadata": {}
                 },
-                "validation_completed": False,
-                "validation_timestamp": datetime.now().isoformat(),
-                "next_step": "complete"
             }
     
     def _enhance_result(self, result: Dict, state: Dict) -> Dict:
@@ -155,15 +153,12 @@ class ValidationAgent(BaseComplianceAgent):
                 self.logger.warning(f"Expected dict result, got {type(result)}")
                 result = {}
             
-            # Extract feature information from state
-            feature_name = state.get("feature_name", "")
-            
-            # Enhanced result with additional metadata
+            # Enhanced result with the new schema
             enhanced_result = {
                 "agent": "ValidationAgent",
-                "feature_name": feature_name,
+                "feature_name": state.get("feature_name", "unknown"),
                 "needs_geo_logic": result.get("needs_geo_logic", "REVIEW"),
-                "confidence_score": float(result.get("confidence", 0.0)),
+                "confidence_score": float(result.get("confidence_score", 0.0)),
                 "reasoning": result.get("reasoning", ""),
                 "validation_reasoning": result.get("validation_reasoning", {}),
                 "related_regulations": result.get("related_regulations", []),

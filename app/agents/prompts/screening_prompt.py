@@ -30,7 +30,7 @@ Return ONLY valid JSON matching this schema:
     "agent": "ScreeningAgent",
     "risk_level": "LOW|MEDIUM|HIGH",
     "compliance_required": true/false,
-    "confidence": 0.0-1.0,
+    "confidence_score": 0.0-1.0,
     "trigger_keywords": ["keyword1", "keyword2"],
     "reasoning": "detailed explanation",
     "needs_research": true/false,

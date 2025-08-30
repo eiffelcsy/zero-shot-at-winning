@@ -104,6 +104,7 @@ class ScreeningAgent(BaseComplianceAgent):
             return {
                 "screening_analysis": enhanced_result,
                 "screening_completed": True,
+                "workflow_completed": False,
                 "screening_timestamp": datetime.now().isoformat(),
                 "next_step": "research" if enhanced_result.get("needs_research", True) else "validation"
             }
@@ -127,6 +128,7 @@ class ScreeningAgent(BaseComplianceAgent):
                     "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or "")
                 },
                 "screening_completed": False,
+                "workflow_completed": False,
                 "screening_timestamp": datetime.now().isoformat(),
                 "next_step": "research"
             }
@@ -192,7 +194,7 @@ class ScreeningAgent(BaseComplianceAgent):
                 "data_sensitivity": result.get("data_sensitivity", "unknown"),
                 "age_sensitivity": result.get("age_sensitivity", False),
                 "reasoning": result.get("reasoning", ""),
-                "confidence_score": float(result.get("confidence", 0.0)),  # Changed from confidence_score to confidence
+                "confidence_score": float(result.get("confidence_score", 0.0)),  # Changed from confidence_score to confidence
                 "tiktok_terminology_used": self._check_tiktok_terminology_usage(result),
                 "memory_overlay_length": len(self.memory_overlay) if self.memory_overlay else 0,
                 "screening_timestamp": datetime.now().isoformat()

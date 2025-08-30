@@ -111,7 +111,7 @@ class BaseComplianceAgent:
         output_summary = {
             "output_keys": list(output_data.keys()) if isinstance(output_data, dict) else "non-dict",
             "agent": output_data.get("agent") if isinstance(output_data, dict) else None,
-            "confidence": output_data.get("confidence") if isinstance(output_data, dict) else None
+            "confidence_score": output_data.get("confidence_score") if isinstance(output_data, dict) else None
         }
         
         self.logger.debug(f"Input summary: {input_summary}")
