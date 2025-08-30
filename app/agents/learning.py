@@ -7,8 +7,8 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from .base import BaseComplianceAgent
-from .prompts.templates import build_learning_prompt
-from .memory_pg import PostgresMemoryStore, ApplyResult
+from .prompts.learning_prompt import build_learning_prompt
+from .memory.memory_pg import PostgresMemoryStore, ApplyResult
 import json
 import os
 from pathlib import Path

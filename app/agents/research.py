@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 import json
 from datetime import datetime
 
-from .prompts.templates import build_research_prompt, build_search_query_prompt
+from .prompts.research_prompt import build_research_prompt, build_search_query_prompt
 from .base import BaseComplianceAgent
 from langgraph.graph import END
 from rag.retrieval.query_processor import QueryProcessor

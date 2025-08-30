@@ -3,8 +3,8 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field, HttpUrl
 from .base import BaseComplianceAgent
-from .prompts.templates import build_validation_prompt
-from .memory_pg import PostgresMemoryStore
+from .prompts.validation_prompt import build_validation_prompt
+from .memory.memory_pg import PostgresMemoryStore
 from typing import Dict, Any, List, Literal
 from datetime import datetime
 import json, os, sys
@@ -34,7 +34,7 @@ class ValidationAgent(BaseComplianceAgent):
             self.memory_overlay = memory_overlay
         else:
             # lazy import and robust init; disable vectors for tests to avoid API key deps
-            from .memory_pg import PostgresMemoryStore
+            from .memory.memory_pg import PostgresMemoryStore
             try:
                 self.store = PostgresMemoryStore(os.getenv("PG_CONN_STRING"), use_vectors=False)
                 self.memory_overlay = self.store.render_overlay_for("validation")

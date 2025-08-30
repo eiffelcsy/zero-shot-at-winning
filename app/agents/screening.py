@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
-from .prompts.templates import build_screening_prompt
+from .prompts.screening_prompt import build_screening_prompt
 from langgraph.graph import END
 from typing import List, Dict, Any, Optional
 from datetime import datetime
