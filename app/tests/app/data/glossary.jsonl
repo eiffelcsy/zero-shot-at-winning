@@ -1,0 +1,12 @@
+{"term": "Verifiable Parental Consent", "definition": "A requirement under COPPA that mandates obtaining explicit permission from a parent or guardian before collecting personal information from children under 13."}
+{"term": "Under-16 Opt-In", "definition": "A requirement in California law that mandates obtaining explicit consent from users under 16 before collecting their personal information."}
+{"term": "T5", "definition": "Highest sensitivity tier for personal data including precise geolocation of minors."}
+{"term": "VPC (Verifiable Parental Consent)", "definition": "Methods acceptable under COPPA to obtain parental consent."}
+{"term": "Geo-logic vs Geofencing", "definition": "'Geo-logic' means jurisdictional decision rules that switch behavior by location; 'Geofencing' is the technical mechanism to detect location boundaries."}
+{"term": "TTL (Time-To-Live)", "definition": "Maximum retention window for raw precise location before redaction/aggregation."}
+{"term": "Under-16 Opt-in (CA/CPRA)", "definition": "Consent requirement for selling/sharing personal data of consumers under 16."}
+{"term": "T5", "definition": "Highest sensitivity tier for personal data including precise geolocation of minors."}
+{"term": "VPC (Verifiable Parental Consent)", "definition": "Methods acceptable under COPPA to obtain parental consent."}
+{"term": "Geo-logic vs Geofencing", "definition": "'Geo-logic' means jurisdictional decision rules that switch behavior by location; 'Geofencing' is the technical mechanism to detect location boundaries."}
+{"term": "TTL (Time-To-Live)", "definition": "Maximum retention window for raw precise location before redaction/aggregation."}
+{"term": "Under-16 Opt-in (CA/CPRA)", "definition": "Consent requirement for selling/sharing personal data of consumers under 16."}

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]   # .../zero-shot-at-winning
 import sys
 sys.path.insert(0, str(ROOT))
 
-from app.agents.learning import LearningAgent  # uses PostgresMemoryStore inside
+from app.agents.feedback.learning import LearningAgent  # uses PostgresMemoryStore inside
 
 # ---------- env & bootstrap ----------
 
@@ -75,7 +75,7 @@ def build_fake_state():
             "reasoning": "Precise location for minors triggers COPPA concerns."
         },
 
-        # LearningAgent now reads research_analysis (dict), not research_evidence (list)
+        # LearningAgent reads research_analysis (dict)
         "research_analysis": {
             "regulations": [
                 {
@@ -84,35 +84,80 @@ def build_fake_state():
                     "section": "16 CFR Part 312",
                     "url": "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa",
                     "excerpt": "Verifiable parental consent required before collecting personal information from children under 13."
+                },
+                # Add a state-specific hook to provoke few-shots and glossary
+                {
+                    "jurisdiction": "US-CA",
+                    "name": "California Privacy Rights Act (CPRA)",
+                    "section": "1798.120 & 1798.140 (definitions/opt-in)",
+                    "url": "https://oag.ca.gov/privacy/ccpa",
+                    "excerpt": "Opt-in consent required for selling/sharing personal information of consumers under 16; parents/guardians may consent for under 13."
                 }
             ]
         },
 
-        # NEW ValidationOutput schema expected under `validation_analysis`
+        # NEW ValidationOutput schema
         "validation_analysis": {
             "agent": "ValidationAgent",
             "feature_name": "Teen Location Sharing",
-            "final_decision": "NEEDS_REVIEW",  # COMPLIANT | NON_COMPLIANT | NEEDS_REVIEW
-            "confidence_score": 0.78,
-            "reasoning": "Initial assessment considers COPPA implications; additional state-specific requirements may apply.",
+            "final_decision": "COMPLIANT",  # COMPLIANT | NON_COMPLIANT | NEEDS_REVIEW
+            "confidence_score": 0.52,
+            "reasoning": "Assessment considers COPPA. California-specific under-16 opt-in and geofencing review need clearer handling.",
             "compliance_requirements": [
-                "Obtain verifiable parental consent for users under 13",
-                "Provide data minimization and retention limits",
-                "Offer guardian dashboard for consent and revocation"
+                "Obtain verifiable parental consent (VPC) for users under 13",
+                "Honor CA under-16 opt-in for selling/sharing personal data",
+                "Minimize precise geolocation retention; purpose-bind and set TTL",
+                "Provide guardian dashboard for consent, revocation, and audit trail"
             ],
-            "risk_assessment": "High risk due to precise geolocation of minors and cross-jurisdictional constraints.",
+            "risk_assessment": "High risk due to precise geolocation of minors plus cross-jurisdictional obligations (federal + CA).",
             "recommendations": [
-                "Add California under-16 opt-in logic",
+                "Add California under-16 opt-in logic and logging",
                 "Gate precise location behind verified guardian consent",
-                "Log consent events and provide audit exports"
+                "Enforce TTL for location (e.g., 24h) and redact after aggregation",
+                "Emit auditable events for consent lifecycle (grant/revoke/expire)"
             ],
             "tiktok_terminology_used": False
         },
 
-        # User feedback the LearningAgent should learn from
+        # User feedback to drive LEARNING (explicitly ask for glossary & few-shots)
         "user_feedback": {
             "is_correct": "no",
-            "notes": "Decision ignored California-specific requirements (e.g., under-16 opt-in). Please add CA coverage and improve examples."
+            "notes": (
+                "Please correct the analysis to explicitly account for CA under-16 opt-in and precise geolocation TTL. "
+                "Also, generate training examples for the ValidationAgent that show how to integrate COPPA + CA in one decision. "
+                "We also need glossary definitions for unclear terms used across agents.\n\n"
+                "GLOSSARY_CANDIDATES:\n"
+                "- T5: Highest sensitivity tier for personal data incl. precise geolocation of minors.\n"
+                "- VPC (Verifiable Parental Consent): Methods acceptable under COPPA to obtain parental consent.\n"
+                "- Geo-logic vs Geofencing: 'Geo-logic' means jurisdictional decision rules that switch behavior by location; "
+                "'Geofencing' is the technical mechanism to detect location boundaries.\n"
+                "- TTL (Time-To-Live): Maximum retention window for raw precise location before redaction/aggregation.\n"
+                "- Under-16 Opt-in (CA/CPRA): Consent requirement for selling/sharing personal data of consumers under 16.\n\n"
+                "FEW_SHOT_REQUEST (ValidationAgent):\n"
+                "BAD_EXAMPLE:\n"
+                "{"
+                "\"final_decision\":\"COMPLIANT\","
+                "\"reasoning\":\"Only COPPA reviewed; CA rules ignored.\","
+                "\"compliance_requirements\":[\"VPC for <13\"],"
+                "\"recommendations\":[\"None\"]"
+                "}\n"
+                "GOOD_EXAMPLE:\n"
+                "{"
+                "\"final_decision\":\"NEEDS_REVIEW\","
+                "\"reasoning\":\"COPPA VPC is required for <13 and CA under-16 opt-in applies. TTL for raw geo set to 24h; guardian audit enabled.\","
+                "\"compliance_requirements\":["
+                "\"VPC for <13 (COPPA)\","
+                "\"CA under-16 opt-in for selling/sharing\","
+                "\"Geo TTL <= 24h; aggregate thereafter\""
+                "],"
+                "\"recommendations\":["
+                "\"Implement consent gating flow (parental/teen)\","
+                "\"Log consent grant/revoke with timestamps\","
+                "\"Block selling/sharing absent CA opt-in for 13-15\""
+                "]"
+                "}\n"
+                "Please add at least one few-shot for 'COMPLIANT' and one for 'NON_COMPLIANT' with clear evidence linkage."
+            )
         }
     }
 

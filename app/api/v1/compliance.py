@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 from app.agents.orchestrator import ComplianceOrchestrator
-from app.agents.learning import LearningAgent
+from app.agents.feedback.learning import LearningAgent
 
 router = APIRouter()
 
