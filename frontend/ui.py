@@ -145,6 +145,8 @@ if 'current_analysis_id' not in st.session_state:
     st.session_state.current_analysis_id = None
 if 'feedback_required' not in st.session_state:
     st.session_state.feedback_required = False
+if 'current_analysis_result' not in st.session_state:
+    st.session_state.current_analysis_result = None
 
 # --- Enhanced Sidebar Navigation ---
 with st.sidebar:
@@ -239,66 +241,176 @@ if page == "Compliance Checker":
                 try:
                     # Call the enhanced compliance check with optional document
                     result = check_compliance(title, description, feature_document)
-                    
-                    # Check if there's a meaningful error (not None)
-                    if result.get("error") is not None and result.get("error") != "":
-                        st.error(f"Error: {result['error']}")
-                    else:
-                        # Display results as prettified JSON
-                        st.markdown("---")
-                        st.markdown("## Compliance Analysis Results")
-                        
-                        # Show basic info
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**Feature:** {title}")
-                            if feature_document:
-                                st.markdown(f"**Document:** {feature_document.name}")
-                        with col2:
-                            st.markdown(f"**Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                            needs_geo = result.get("needs_geo_logic", "UNKNOWN")
-                            if needs_geo == "YES":
-                                st.markdown("**Result:** Requires geo-logic")
-                            elif needs_geo == "NO":
-                                st.markdown("**Result:** No geo-logic required")
-                            else:
-                                st.markdown("**Result:** Unclear")
-                        
-                        st.markdown("---")
-                        
-                        # JSON Display
-                        st.markdown("### Complete Analysis Result (JSON)")
-                        st.markdown("*Click to expand and copy the full result*")
-                        
-                        # Pretty print the JSON
-                        json_str = json.dumps(result, indent=2, ensure_ascii=False, default=str)
-                        
-                        # Use code block for better formatting
-                        st.code(json_str, language="json", line_numbers=True)
-                        
-                        # Download option
-                        st.markdown("### Download Results")
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.download_button(
-                                label="Download as JSON",
-                                data=json_str,
-                                file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                                mime="application/json",
-                                use_container_width=True
-                            )
-                        
-                        with col2:
-                            if st.button("Analyze Another Feature", use_container_width=True):
-                                st.rerun()
-                    
+                    # Store the result in session state
+                    st.session_state.current_analysis_result = result
                 except Exception as e:
                     st.markdown(f"""
                         <div class="warning-badge">
                             Error during analysis: {str(e)}
                         </div>
                     """, unsafe_allow_html=True)
+
+    # Display results section if we have results in session state
+    if st.session_state.current_analysis_result:
+        result = st.session_state.current_analysis_result
+        
+        if result.get("error") is not None and result.get("error") != "":
+            st.error(f"Error: {result['error']}")
+        else:
+            # Display key compliance findings first
+            st.markdown("## Compliance Analysis Results")
+            
+            # Create three columns for key metrics
+            col1, col2, col3 = st.columns(3)
+            
+            needs_geo = None
+            if result.get("validation_result"):
+                needs_geo = result["validation_result"].get("requires_geo_logic")
+            
+            with col1:
+                if needs_geo == True:
+                    st.error("Requires Geo-Logic")
+                elif needs_geo == False:
+                    st.success("No Geo-Logic Required")
+                else:
+                    st.warning("Assessment Pending")
+            
+            with col2:
+                confidence = result.get("confidence_score", 0)
+                st.metric("Confidence Score", f"{confidence:.0%}")
+                
+            with col3:
+                risk_level = result.get("risk_level", "UNKNOWN")
+                st.metric("Risk Level", risk_level)
+
+            # Key findings in an expandable section
+            with st.expander("Detailed Analysis", expanded=True):
+                st.markdown("### Key Findings")
+                
+                # Reasoning section
+                st.markdown("#### Reasoning")
+                st.markdown(result.get("reasoning", "No reasoning provided"))
+                
+                # Related regulations if available
+                if result.get("related_regulations"):
+                    st.markdown("#### Related Regulations")
+                    for reg in result.get("related_regulations"):
+                        st.markdown(f"- {reg}")
+            
+            # Debug information in collapsed section
+            with st.expander("Debug Information", expanded=False):
+                st.markdown("### Analysis Metadata")
+                debug_info = {
+                    "Analysis ID": result.get("analysis_id"),
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Model Version": result.get("model_version"),
+                    "Raw Confidence Scores": result.get("raw_scores"),
+                    "Processing Time": result.get("processing_time")
+                }
+                
+                # Display debug info as a table
+                debug_df = pd.DataFrame(list(debug_info.items()), columns=["Metric", "Value"])
+                st.table(debug_df)
+                
+                # Raw JSON output
+                st.markdown("### Raw JSON Response")
+                st.json(result)
+
+            # Action buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                # Export options
+                export_format = st.selectbox(
+                    "Export Format",
+                    ["JSON", "PDF", "CSV"]
+                )
+                st.download_button(
+                    f"Download as {export_format}",
+                    data=json.dumps(result, indent=2),
+                    file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
+                    mime=f"application/{export_format.lower()}",
+                    use_container_width=True
+                )
+            
+            with col2:
+                if st.button("Analyze Another Feature", use_container_width=True):
+                    st.rerun()
+    
+        # Feedback Section
+        st.markdown("---")
+        st.markdown("### Analysis Feedback")
+        
+        feedback_col1, feedback_col2 = st.columns(2)
+        
+        with feedback_col1:
+            feedback_type = st.radio(
+                "Was this analysis helpful?",
+                ["Good Response", "Needs Improvement"],
+                key="feedback_type"
+            )
+        
+        if feedback_type == "Good Response":
+            with st.expander("Submit Positive Feedback", expanded=True):
+                st.markdown("""
+                    Thank you for confirming the analysis quality! 
+                    This helps improve our system's confidence metrics.
+                """)
+                if st.button("Confirm Good Response", type="primary", key="submit_good_feedback"):
+                    feedback_response = submit_feedback(
+                        analysis_id=result["analysis_id"],
+                        feedback_type="positive"
+                    )
+                    if feedback_response.get("error"):
+                        st.error(f"Error submitting feedback: {feedback_response['error']}")
+                    else:
+                        st.success("Thank you for your feedback!")
+        
+        else:  # Needs Improvement
+            with st.expander("Submit Improvement Feedback", expanded=True):
+                improvement_reason = st.selectbox(
+                    "What needs improvement?",
+                    [
+                        "Incorrect compliance flag",
+                        "Missing relevant regulations",
+                        "Reasoning needs clarification",
+                        "Wrong confidence score",
+                        "Other issues"
+                    ]
+                )
+                
+                feedback_text = st.text_area(
+                    "Please provide more details",
+                    placeholder="Help us understand what was incorrect or missing...",
+                    height=100
+                )
+                
+                # Corrective inputs based on improvement reason
+                correction_data = {}
+                if improvement_reason == "Incorrect compliance flag":
+                    correction_data["correct_flag"] = st.radio(
+                        "Correct compliance requirement:",
+                        ["Requires Geo-Logic", "Does Not Require Geo-Logic"]
+                    )
+                elif improvement_reason == "Missing relevant regulations":
+                    correction_data["missing_regulations"] = st.text_area(
+                        "List relevant regulations",
+                        placeholder="Enter each regulation on a new line"
+                    )
+                
+                if st.button("Submit Feedback", type="primary", key="submit_bad_feedback"):
+                    if not feedback_text:
+                        st.warning("Please provide detailed feedback before submitting")
+                    else:
+                        feedback_response = submit_feedback(
+                            analysis_id=result["analysis_id"],
+                            feedback_type="negative",
+                            feedback_text=feedback_text,
+                            correction_data=correction_data
+                        )
+                        if feedback_response.get("error"):
+                            st.error(f"Error submitting feedback: {feedback_response['error']}")
+                        else:
+                            st.success("Thank you for your detailed feedback! We'll use this to improve our system.")      
 
 # ================================================
 # Page 2: Upload Regulations (unchanged)
