@@ -16,7 +16,6 @@ class ResearchOutput(BaseModel):
     regulations: List[Dict[str, Any]] = Field(description="Regulations found")
     queries_used: List[str] = Field(description="Queries used to retrieve documents")
     confidence_score: float = Field(description="Confidence score")
-    retrieved_documents: List[Dict[str, Any]] = Field(description="Retrieved documents")
 
 class ResearchAgent(BaseComplianceAgent):
     """Research Agent - finds relevant regulations using RAG system with ChromaDB"""
@@ -24,8 +23,7 @@ class ResearchAgent(BaseComplianceAgent):
     def __init__(self, 
                 embedding_model: str = "text-embedding-3-large",
                 memory_overlay: str = ""):
-        super().__init__("ResearchAgent")
-        self.memory_overlay = memory_overlay
+        super().__init__("ResearchAgent", memory_overlay=memory_overlay)
         
         # Initialize RAG components
         self.client = get_chroma_client()
@@ -46,114 +44,56 @@ class ResearchAgent(BaseComplianceAgent):
         self._setup_chain()
 
     def _setup_chain(self):
-        """Setup LangChain prompt and parser with dynamic prompt building"""
+        """Setup LangChain prompt and parser with dynamic prompt building and TikTok terminology context"""
         research_prompt = build_research_prompt(self.memory_overlay)
         
-        # Debug: Log memory overlay status
+        # Enhanced logging for memory overlay integration
         if self.memory_overlay:
             self.logger.info(f"Research agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
             if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("TikTok terminology found in memory overlay")
+                self.logger.info("✓ TikTok terminology found in memory overlay - agents will understand TikTok acronyms")
+                self.logger.info("✓ Agents can now properly interpret: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
             else:
-                self.logger.warning("TikTok terminology NOT found in memory overlay")
+                self.logger.warning("⚠ TikTok terminology NOT found in memory overlay - agents may miss TikTok-specific context")
         else:
-            self.logger.warning("Research agent initialized with NO memory overlay")
+            self.logger.warning("⚠ Research agent initialized with NO memory overlay - will lack TikTok terminology context")
         
         self.create_chain(research_prompt, ResearchOutput)
     
     def update_memory(self, new_memory_overlay: str):
-        """Allow runtime updates to the prompt for learning"""
-        self.memory_overlay = new_memory_overlay
-        self._setup_chain()
-
-    async def _generate_search_query_llm(self, screening_analysis: Dict) -> str:
-        """Generate optimized search query using LLM with TikTok terminology context"""
+        """Allow runtime updates to the prompt for learning with TikTok terminology context"""
+        self.logger.info(f"Updating research agent memory overlay: {len(self.memory_overlay or '')} -> {len(new_memory_overlay)} characters")
         
-        # Extract key information for query generation
-        trigger_keywords = screening_analysis.get("trigger_keywords", [])
-        geographic_scope = screening_analysis.get("geographic_scope", [])
-        data_sensitivity = screening_analysis.get("data_sensitivity", "")
-        age_sensitivity = screening_analysis.get("age_sensitivity", False)
+        # Call parent method to update memory overlay
+        super().update_memory(new_memory_overlay)
         
-        # Build context for LLM
-        context = {
-            "trigger_keywords": trigger_keywords,
-            "geographic_scope": geographic_scope,
-            "data_sensitivity": data_sensitivity,
-            "age_sensitivity": age_sensitivity,
-            "terminology_analysis": screening_analysis.get("terminology_analysis", {})
-        }
+        # Rebuild the chain with new memory context
+        research_prompt = build_research_prompt(new_memory_overlay)
+        self.create_chain(research_prompt, ResearchOutput)
         
-        try:
-            # Create a direct LLM call for search query generation
-            # This bypasses the validation that expects research prompt variables
-            search_prompt = build_search_query_prompt(self.memory_overlay)
-            
-            # Debug: Log search prompt status
-            if self.memory_overlay:
-                self.logger.info(f"Search query generation using memory overlay ({len(self.memory_overlay)} characters)")
-                if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                    self.logger.info("TikTok terminology available for search query generation")
-                else:
-                    self.logger.warning("TikTok terminology NOT available for search query generation")
-            else:
-                self.logger.warning("Search query generation with NO memory overlay")
-            
-            formatted_prompt = search_prompt.format(screening_analysis=context)
-            result = await self.llm.ainvoke(formatted_prompt)
-            if isinstance(result, str):
-                return result
-            elif isinstance(result, dict) and "query" in result:
-                return result["query"]
-            else:
-                # Fallback to basic query construction
-                return self._build_fallback_query(context)
-        except Exception as e:
-            self.logger.warning(f"LLM query generation failed: {e}, using fallback")
-            return self._build_fallback_query(context)
+        self.logger.info("✓ Research agent chain rebuilt with updated TikTok terminology context")
     
     def _build_fallback_query(self, context: Dict) -> str:
-        """Build a fallback search query when LLM generation fails"""
-        keywords = context.get("trigger_keywords", [])
-        geo_scope = context.get("geographic_scope", [])
+        """Build a fallback query when LLM query generation fails"""
+        feature_name = context.get("feature_name", "feature")
+        feature_description = context.get("feature_description", "")
         
-        # Basic query construction
-        query_parts = []
+        # Basic query construction with TikTok terminology awareness
+        query_parts = [feature_name]
         
-        # Add compliance-related terms
-        if keywords:
-            query_parts.extend(keywords)
+        if feature_description:
+            # Extract key terms from description
+            words = feature_description.split()[:10]  # Limit to first 10 words
+            query_parts.extend(words)
         
-        # Add geographic context
-        if geo_scope and geo_scope != ["global"]:
-            query_parts.extend(geo_scope)
-        
-        # Add data sensitivity context
-        if context.get("data_sensitivity"):
-            query_parts.append("data protection")
-            query_parts.append("privacy")
-        
-        # Add age sensitivity context
-        if context.get("age_sensitivity"):
-            query_parts.append("minor protection")
-            query_parts.append("age verification")
-        
-        # Add TikTok terminology context
-        terminology = context.get("terminology_analysis", {})
-        if terminology.get("acronyms_found"):
-            for acronym in terminology["acronyms_found"]:
-                meaning = terminology.get("acronym_meanings", {}).get(acronym, "")
-                if meaning:
-                    query_parts.append(meaning)
-        
-        # Ensure we have a meaningful query
-        if not query_parts:
-            query_parts = ["compliance", "regulations", "legal requirements"]
+        # Add TikTok compliance context if available
+        if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+            query_parts.extend(["TikTok", "compliance", "regulation"])
         
         return " ".join(query_parts)
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """RAG-based research process using vector storage and retrieval"""
+        """RAG-based research process using vector storage and retrieval with TikTok terminology context"""
         try:
             # Extract inputs from state
             feature_name = state.get("feature_name", "")
@@ -169,8 +109,12 @@ class ResearchAgent(BaseComplianceAgent):
             # Step 1: Generate search query using LLM with TikTok terminology context
             base_query = await self._generate_search_query_llm(screening_analysis)
             
-            # Log the generated query for debugging
-            self.logger.info(f"Generated search query: {base_query}")
+            # Log the generated query for compliance tracking
+            self.log_search_query(
+                query=base_query,
+                context=f"Feature: {feature_name}",
+                results_count=0  # Will be updated after retrieval
+            )
 
             # Step 2: Retrieve documents using the RetrievalTool (handles query enhancement + retrieval)
             retrieved_documents = await self.retrieval_tool.ainvoke({
@@ -181,158 +125,166 @@ class ResearchAgent(BaseComplianceAgent):
             # Get the enhanced query for logging purposes
             expanded_queries = retrieved_documents.get("enhanced_queries", [base_query])
             
-            # Log retrieval results for debugging
-            self.logger.info(f"Retrieved {len(retrieved_documents.get('raw_results', []))} documents")
+            # Log retrieval results for compliance tracking
+            raw_results = retrieved_documents.get('raw_results', [])
+            self.logger.info(f"Retrieved {len(raw_results)} documents for compliance analysis")
             self.logger.info(f"Enhanced queries: {expanded_queries}")
+            
+            # Log each enhanced query for detailed tracking
+            for i, query in enumerate(expanded_queries):
+                self.log_search_query(
+                    query=query,
+                    context=f"Enhanced query {i+1} for feature: {feature_name}",
+                    results_count=len(raw_results)
+                )
 
             # Step 4: Extract regulations from retrieved docs with proper relevance scoring
-            regulations = self._extract_regulations(retrieved_documents.get("raw_results", []))
+            regulations = self._extract_regulations(raw_results)
             
-            # Step 5: Use LLM for final synthesis with proper input format
-            llm_input = {
+            # Step 5: Use LLM for final synthesis with proper input format and TikTok context
+            synthesis_input = {
                 "feature_name": feature_name,
                 "feature_description": feature_description,
                 "screening_analysis": json.dumps(screening_analysis, indent=2),
-                "evidence_found": json.dumps(regulations, indent=2),
+                "retrieved_regulations": json.dumps(regulations, indent=2),
+                "queries_used": json.dumps(expanded_queries, indent=2)
             }
-
-            result = await self.safe_llm_call(llm_input)
-
-            # Step 6: Calculate confidence based on regulation relevance scores
-            confidence_score = self._calculate_overall_confidence(regulations, result)
-
-            # Step 7: Ensure proper output schema
-            if not isinstance(result, dict):
-                result = {}
             
-            result["regulations"] = regulations
-            result["queries_used"] = expanded_queries
-            result["agent"] = "ResearchAgent"
-            result["confidence_score"] = confidence_score
+            # Log the synthesis attempt with memory context
+            self.logger.info(f"Research agent synthesizing results with {len(regulations)} regulations found")
+            if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                self.logger.info("✓ Synthesis includes TikTok terminology context for better compliance analysis")
+            else:
+                self.logger.warning("⚠ Synthesis missing TikTok terminology context")
             
-            # Log the final result for debugging
-            self.logger.info(f"Research completed with {len(regulations)} regulations, confidence: {confidence_score}")
-
-            self.log_interaction(state, result)
-
-            # Return enhanced state update with consistent field names
+            final_result = await self.safe_llm_call(synthesis_input)
+            
+            # Step 6: Format final output with enhanced metadata
+            research_analysis = {
+                "agent": "ResearchAgent",
+                "regulations": regulations,
+                "queries_used": expanded_queries,
+                "confidence_score": final_result.get("confidence_score", 0.0),
+                "documents_retrieved": len(raw_results),
+                "synthesis_result": final_result,
+                "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or ""),
+                "memory_overlay_length": len(self.memory_overlay) if self.memory_overlay else 0
+            }
+            
+            # Log successful research completion
+            self.logger.info(f"✓ Research agent completed analysis for '{feature_name}' with {len(regulations)} regulations")
+            self.logger.info(f"✓ TikTok terminology context: {'Available' if research_analysis['tiktok_terminology_used'] else 'Missing'}")
+            
             return {
-                "research_analysis": {
-                    "agent": "ResearchAgent",
-                    "regulations": result["regulations"],
-                    "queries_used": result["queries_used"],
-                    "confidence_score": result["confidence_score"],
-                    "retrieved_documents": retrieved_documents["raw_results"]
-                },
+                "research_analysis": research_analysis,
                 "research_completed": True,
                 "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
             }
-
+            
         except Exception as e:
-            self.logger.error(f"Research agent failed: {e}")
-            # Simplified error handling - return error in state
+            self.log_error(e, state, "Research agent process failed")
             return {
                 "research_analysis": {
                     "agent": "ResearchAgent",
+                    "error": str(e),
                     "regulations": [],
                     "queries_used": [],
                     "confidence_score": 0.0,
-                    "retrieved_documents": [],
-                    "error": str(e)
+                    "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or "")
                 },
-                "research_completed": True,
+                "research_completed": False,
                 "research_timestamp": datetime.now().isoformat(),
                 "next_step": "validation"
             }
 
-    def _calculate_overall_confidence(self, regulations: List[Dict[str, Any]], llm_result: Dict) -> float:
-        """Calculate confidence considering both RAG results and LLM analysis"""
-        
-        # Base confidence from document similarity
-        if not regulations:
-            rag_confidence = 0.0
-        else:
-            # Extract relevance scores and filter out invalid ones
-            relevance_scores = []
-            for reg in regulations:
-                score = reg.get("relevance_score", 0.0)
-                if isinstance(score, (int, float)) and 0 <= score <= 1:
-                    relevance_scores.append(score)
-                else:
-                    self.logger.warning(f"Invalid relevance score: {score}, skipping")
+    async def _generate_search_query_llm(self, screening_analysis: Dict) -> str:
+        """Generate search query using LLM with TikTok terminology context"""
+        try:
+            # Build search query prompt with TikTok terminology context
+            search_prompt = build_search_query_prompt(self.memory_overlay)
             
-            if relevance_scores:
-                rag_confidence = sum(relevance_scores) / len(relevance_scores)
-            else:
-                rag_confidence = 0.0
-        
-        # LLM confidence (if provided)
-        llm_confidence = llm_result.get("confidence_score", 0.5)
-        if not isinstance(llm_confidence, (int, float)) or not (0 <= llm_confidence <= 1):
-            llm_confidence = 0.5
-        
-        # Combine both confidences (weighted average)
-        combined_confidence = (rag_confidence * 0.7) + (llm_confidence * 0.3)
-        
-        # Log confidence calculation for debugging
-        self.logger.info(f"Confidence calculation: RAG={rag_confidence:.3f}, LLM={llm_confidence:.3f}, Combined={combined_confidence:.3f}")
-        
-        return round(combined_confidence, 3)
-
-    def _extract_regulations(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Extract regulations from retrieved documents with specified fields"""
-        regulations = []
-        
-        for doc in documents:
-            metadata = doc.get("metadata", {})
-            reg_name = metadata.get("regulation_name", "Unknown Regulation")
-            source_filename = metadata.get("source_filename", "unknown.pdf")
+            # Log the search query generation attempt
+            self.logger.info("Generating search query using LLM with TikTok terminology context")
             
-            # Get the document content as excerpt (quoted verbatim)
-            excerpt = doc.get("document", "")
-            
-            # Fix: Use improved confidence calculation
-            distance = doc.get("distance", 1.0)
-            relevance_score = self._calculate_regulation_confidence(distance)
-            
-            # Create regulation entry
-            regulation_entry = {
-                "source_filename": source_filename,
-                "regulation_name": reg_name,
-                "excerpt": excerpt,
-                "relevance_score": relevance_score
+            # Prepare input for search query generation
+            search_input = {
+                "feature_name": screening_analysis.get("feature_name", ""),
+                "feature_description": screening_analysis.get("feature_description", ""),
+                "screening_analysis": json.dumps(screening_analysis, indent=2)
             }
             
-            regulations.append(regulation_entry)
-        
-        # Sort by confidence score descending
-        regulations.sort(key=lambda x: x["relevance_score"], reverse=True)
-        return regulations[:10]  # Top 10 regulations
+            # Generate search query
+            search_result = await self.safe_llm_call(search_input)
+            
+            # Extract the generated query
+            generated_query = search_result.get("search_query", "")
+            
+            if not generated_query:
+                self.logger.warning("LLM failed to generate search query, using fallback")
+                generated_query = self._build_fallback_query(search_input)
+            
+            # Log the generated query
+            self.logger.info(f"Generated search query: '{generated_query}'")
+            
+            # Check if query includes TikTok terminology
+            if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                tiktok_terms = ["NR", "PF", "GH", "CDS", "DRT", "LCP", "Redline", "Softblock", "Spanner", "ShadowMode", "T5", "ASL", "Glow", "NSP", "Jellybean", "EchoTrace", "BB", "Snowcap", "FR", "IMT"]
+                found_terms = [term for term in tiktok_terms if term in generated_query]
+                if found_terms:
+                    self.logger.info(f"✓ Search query includes TikTok terminology: {found_terms}")
+                else:
+                    self.logger.info("Search query generated without specific TikTok terminology (may be appropriate)")
+            
+            return generated_query
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate search query using LLM: {e}")
+            self.logger.info("Using fallback query generation")
+            return self._build_fallback_query({
+                "feature_name": screening_analysis.get("feature_name", ""),
+                "feature_description": screening_analysis.get("feature_description", "")
+            })
 
-    def _calculate_regulation_confidence(self, distance: float) -> float:
-        """Calculate confidence score from document distance"""
-        if distance is None:
-            return 0.5  # Neutral confidence for unknown distance
+    def _extract_regulations(self, raw_results: List[Dict]) -> List[Dict[str, Any]]:
+        """Extract and format regulations from retrieved documents with TikTok terminology context"""
+        regulations = []
         
-        try:
-            # ChromaDB typically returns cosine distances where:
-            # - Lower distance = higher similarity (more relevant)
-            # - Higher distance = lower similarity (less relevant)
-            
-            # For cosine similarity: distance 0.0 = perfect match, distance 1.0 = no similarity
-            # Convert to confidence: 0.0 distance = 1.0 confidence, 1.0 distance = 0.0 confidence
-            confidence = max(0.0, 1.0 - distance)
-            
-            # Apply sigmoid-like transformation for better score distribution
-            confidence = confidence ** 0.5  # Square root for better curve
-            
-            # Ensure we don't get 0.0 confidence for very similar documents
-            if confidence < 0.1:
-                confidence = 0.1  # Minimum confidence threshold
-            
-            return round(confidence, 3)  # Return 0.1-1.0 range for individual scores
-        except (TypeError, ValueError) as e:
-            self.logger.warning(f"Error calculating regulation confidence: {e}, using fallback")
-            return 0.5
+        for i, result in enumerate(raw_results):
+            try:
+                # Extract document content and metadata
+                content = result.get("content", "")
+                metadata = result.get("metadata", {})
+                
+                # Basic regulation extraction
+                regulation = {
+                    "id": f"reg_{i+1}",
+                    "content": content[:500] + "..." if len(content) > 500 else content,  # Truncate for readability
+                    "metadata": metadata,
+                    "relevance_score": result.get("score", 0.0),
+                    "source": metadata.get("source", "unknown"),
+                    "page": metadata.get("page", "unknown")
+                }
+                
+                # Check if content contains TikTok terminology (if memory overlay is available)
+                if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                    tiktok_terms = ["NR", "PF", "GH", "CDS", "DRT", "LCP", "Redline", "Softblock", "Spanner", "ShadowMode", "T5", "ASL", "Glow", "NSP", "Jellybean", "EchoTrace", "BB", "Snowcap", "FR", "IMT"]
+                    found_terms = [term for term in tiktok_terms if term in content]
+                    if found_terms:
+                        regulation["tiktok_terminology_found"] = found_terms
+                        regulation["relevance_score"] = min(regulation["relevance_score"] * 1.2, 1.0)  # Boost relevance for TikTok-specific content
+                        self.logger.info(f"✓ Regulation {i+1} contains TikTok terminology: {found_terms}")
+                
+                regulations.append(regulation)
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to extract regulation {i+1}: {e}")
+                continue
+        
+        # Sort by relevance score
+        regulations.sort(key=lambda x: x.get("relevance_score", 0.0), reverse=True)
+        
+        self.logger.info(f"Extracted {len(regulations)} regulations from {len(raw_results)} retrieved documents")
+        
+        return regulations
 

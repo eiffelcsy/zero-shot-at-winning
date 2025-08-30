@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
-from app.agents.memory_pg import PostgresMemoryStore
+from app.agents.memory.memory_pg import PostgresMemoryStore
 
 PG_CONN_STRING = os.getenv("PG_CONN_STRING")
 DB_NAME = os.getenv("DB_NAME")

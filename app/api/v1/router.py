@@ -29,32 +29,24 @@ class UploadResponse(BaseModel):
 
 class PipelineStatsResponse(BaseModel):
     pipeline_config: Dict[str, Any]
-    storage_stats: Dict[str, Any]
-    status: str
+    collection_stats: Dict[str, Any]
+    embedding_model: str
 
 class ComplianceResponse(BaseModel):
-    """Response model for compliance analysis"""
-    session_id: Optional[str] = Field(description="Session ID for tracking")
-    feature_name: str = Field(description="Name of the analyzed feature")
-    needs_geo_logic: str = Field(description="Whether feature needs geo-specific logic (YES/NO/REVIEW/UNKNOWN)")
-    reasoning: Dict[str, Any] = Field(description="Detailed reasoning for the decision")
-    related_regulations: List[Dict[str, Any]] = Field(default=[], description="List of related regulation objects")
-    confidence_score: float = Field(description="Confidence score between 0.0 and 1.0")
-    risk_level: str = Field(description="Risk level (LOW/MEDIUM/HIGH/UNKNOWN)")
-    workflow_completed: Optional[bool] = Field(description="Whether the full workflow completed")
-    agents_completed: List[str] = Field(default=[], description="List of agents that completed processing")
-    evidence_sources: int = Field(default=0, description="Number of evidence sources found")
-    research_confidence: float = Field(default=0.0, description="Research agent confidence score")
-    applicable_jurisdictions: List[str] = Field(default=[], description="Applicable legal jurisdictions")
+    status: str = Field(description="Analysis status: 'success', 'partial', or 'error'")
+    message: str = Field(description="Human-readable summary of the analysis")
+    analysis_id: str = Field(description="Unique identifier for this analysis")
+    timestamp: str = Field(description="ISO timestamp of when analysis was completed")
     
-    # Multi-agent specific fields
-    screening_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Screening agent results")
-    research_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Research agent results")
-    validation_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Validation agent results")
-    final_decision: Optional[Dict[str, Any]] = Field(default=None, description="Final validation decision")
+    # Agent-specific results
+    screening_result: Optional[Dict[str, Any]] = Field(default=None, description="Screening agent analysis")
+    research_result: Optional[Dict[str, Any]] = Field(default=None, description="Research agent analysis")
+    validation_result: Optional[Dict[str, Any]] = Field(default=None, description="Validation agent analysis")
     
-    # Agent statuses
-    agent_statuses: Dict[str, str] = Field(default={}, description="Status of each agent (completed, failed, etc.)")
+    # Overall workflow results
+    agents_completed: List[str] = Field(description="List of agents that completed successfully")
+    workflow_status: str = Field(description="Overall workflow status")
+    confidence_score: Optional[float] = Field(default=None, description="Overall confidence score")
     
     error: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
@@ -67,16 +59,20 @@ pipeline = PDFIngestionPipeline(
 )
 
 # Initialize the compliance orchestrator for LangGraph multi-agent workflow
-# Get proper TikTok terminology overlay from memory store
-from agents.initialize_system import get_agent_overlays
+# Get proper TikTok terminology overlay from the new combined memory system
+from agents.memory.tiktok_memory import get_agent_overlays
 
 try:
     overlays = get_agent_overlays()
     screening_overlay = overlays["screening"]
-    print(f"Loaded TikTok terminology overlay ({len(screening_overlay)} characters)")
+    logger.info(f"Loaded TikTok terminology overlay ({len(screening_overlay)} characters)")
+    if "TIKTOK TERMINOLOGY REFERENCE" in screening_overlay:
+        logger.info("✓ TikTok terminology successfully loaded and integrated")
+    else:
+        logger.warning("⚠ TikTok terminology NOT found in overlay")
 except Exception as e:
-    print(f"Warning: Could not load TikTok terminology overlay: {e}")
-    print("   Run: python app/agents/initialize_system.py to set up terminology")
+    logger.error(f"Failed to load TikTok terminology overlay: {e}")
+    logger.warning("Compliance analysis will run without TikTok terminology context")
     screening_overlay = ""
 
 compliance_orchestrator = ComplianceOrchestrator(memory_overlay=screening_overlay)
@@ -564,25 +560,20 @@ async def run_compliance_analysis(
             applicable_jurisdictions = []
         
         return ComplianceResponse(
-            session_id=orchestrator_result.get("session_id"),
-            feature_name=orchestrator_result.get("feature_name", title),
-            needs_geo_logic=orchestrator_result.get("needs_geo_logic", "UNKNOWN"),
-            reasoning=orchestrator_result.get("reasoning", ""),
-            related_regulations=related_regulations,
-            confidence_score=float(orchestrator_result.get("confidence_score", 0.0)),
-            risk_level=orchestrator_result.get("risk_level", "UNKNOWN"),
-            workflow_completed=workflow_completed,
-            agents_completed=agents_completed,
-            evidence_sources=int(orchestrator_result.get("evidence_sources", 0)),
-            research_confidence=float(orchestrator_result.get("research_confidence", 0.0)),
-            applicable_jurisdictions=applicable_jurisdictions,
+            status="success",
+            message=f"Compliance analysis for '{title}' completed successfully.",
+            analysis_id=str(uuid.uuid4()), # Generate a new ID for each analysis
+            timestamp=datetime.now().isoformat(),
             
-            # Multi-agent specific results
-            screening_analysis=screening_analysis,
-            research_analysis=research_analysis,
-            validation_analysis=validation_analysis,
-            final_decision=final_decision,
-            agent_statuses=agent_statuses,
+            # Agent-specific results
+            screening_result=screening_analysis,
+            research_result=research_analysis,
+            validation_result=validation_analysis,
+            
+            # Overall workflow results
+            agents_completed=agents_completed,
+            workflow_status="completed",
+            confidence_score=float(orchestrator_result.get("confidence_score", 0.0)),
             
             error=orchestrator_result.get("error")
         )
@@ -590,25 +581,20 @@ async def run_compliance_analysis(
     except Exception as e:
         logger.error(f"Error in LangGraph compliance analysis: {str(e)}")
         return ComplianceResponse(
-            session_id=None,
-            feature_name=title,
-            needs_geo_logic="UNKNOWN",
-            reasoning=f"Analysis failed due to error: {str(e)}",
-            related_regulations=[],
-            confidence_score=0.0,
-            risk_level="ERROR",
-            workflow_completed=False,
-            agents_completed=[],
-            evidence_sources=0,
-            research_confidence=0.0,
-            applicable_jurisdictions=[],
+            status="error",
+            message=f"Compliance analysis failed for '{title}': {str(e)}",
+            analysis_id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
             
-            # Multi-agent specific error state
-            screening_analysis=None,
-            research_analysis=None,
-            validation_analysis=None,
-            final_decision=None,
-            agent_statuses={"screening": "failed", "research": "failed", "validation": "failed"},
+            # Agent-specific error state
+            screening_result=None,
+            research_result=None,
+            validation_result=None,
+            
+            # Overall workflow results
+            agents_completed=[],
+            workflow_status="failed",
+            confidence_score=0.0,
             
             error=str(e)
         )
