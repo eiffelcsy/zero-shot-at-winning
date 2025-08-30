@@ -37,7 +37,8 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 git clone https://github.com/yourusername/zero-shot-at-winning.git
 cd zero-shot-at-winning
 ```
-2. Environment Setup
+2. Environment Setup:
+
 Copy .env.example into .env and configure API keys:
 ```bash
 cp .env.example .env
