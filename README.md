@@ -5,7 +5,7 @@
 ## Overview
 TikTok operates globally, and each product feature must comply with multiple geographic regulations — from Brazil’s data localization laws to GDPR in Europe. Manual compliance checks are slow, error-prone, and risk legal exposure.
 
-Our product is a prototype system that uses Large Language Models (LLMs) to automatically flag features requiring geo-specific compliance logic. The solution provides auditable outputs, enabling proactive legal guardrails and traceable evidence for regulatory audits.
+Our project introduces a prototype system that uses Large Language Models (LLMs) to automatically flag features requiring geo-specific compliance logic. The solution provides auditable outputs, enabling proactive legal guardrails and traceable evidence for regulatory audits.
 
 ## Problem Statement
 Detect whether a TikTok feature needs geo-specific compliance logic based on feature artifacts such as titles, descriptions, and documents (PRD, TRD).
@@ -31,10 +31,11 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 - **Extensible Architecture**: Supports adding domain-specific knowledge or alternative detection methods
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, LangChain, LangGraph, ChromaDB Cloud
-- **Frontend**: Streamlit
-- **Containerization**: Docker, Docker Compose
-- **Data**: No additional datasets used, all data is found in problem statement.
+- **Backend:** Python 3.11+, FastAPI, LangChain, SQLAlchemy, Celery
+- **LLM Integration:** OpenAI GPT-4 
+- **Vector Database:** ChromaDB
+- **Frontend:** Streamlit
+- **Infrastructure:** Docker, Docker Compose, Redis, PostgreSQL
 
 ## Installation & Setup
 
@@ -43,19 +44,28 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 git clone https://github.com/yourusername/zero-shot-at-winning.git
 cd zero-shot-at-winning
 ```
-2. Build and run with Docker Compose:
+2. Environment Setup
+3. Copy .env.example into .env and configure API keys:
+```bash
+cp .env.example .env
+```
+3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+5. Build and run with Docker Compose:
 ```bash
 docker compose build
 docker compose up
 ```
-3. Alternatively, run frontend locally using Streamlit:
+5. Run Frontend UI in another terminal:
 ```bash
 streamlit run frontend/ui.py
 ```
-4. The backend API will process the sample dataset and generate:
-- CSV output with compliance flags
-- Human-readable reasoning
 
+## Repository Structure
+See docs/ARCHITECTURE.md for full details.
+ 
 ## Demo Video
 Watch our 3-minute demo: YouTube Link
 
