@@ -83,12 +83,10 @@ class PDFIngestionPipeline:
             embeddings = self.vector_storage.generate_embeddings(chunk_texts)
             
             # Step 4: Store chunks with embeddings and metadata in batches
-            # Prepare metadata for this specific file
             storage_metadata = {
                 'source_filename': filename
             }
             
-            # Add file-specific metadata if provided
             if file_metadata:
                 storage_metadata.update(file_metadata)
                 logger.info(f"Added file metadata to storage_metadata: {storage_metadata}")
@@ -201,43 +199,6 @@ class PDFIngestionPipeline:
             }
         
         return results
-    
-    def get_pipeline_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about the current pipeline state and ChromaDB collection.
-        
-        Returns:
-            Dictionary containing pipeline and storage statistics
-        """
-        try:
-            collection_stats = self.vector_storage.get_collection_stats()
-            
-            return {
-                'pipeline_config': {
-                    'chunk_size': self.text_chunker.chunk_size,
-                    'chunk_overlap': self.text_chunker.overlap,
-                    'embedding_model': self.vector_storage.embedding_model,
-                    'collection_name': self.vector_storage.collection_name,
-                    'batch_size': self.batch_size
-                },
-                'storage_stats': collection_stats,
-                'status': 'operational'
-            }
-        except Exception as e:
-            logger.error(f"Failed to get pipeline stats: {e}")
-            return {
-                'pipeline_config': {
-                    'chunk_size': self.text_chunker.chunk_size,
-                    'chunk_overlap': self.text_chunker.overlap,
-                    'embedding_model': self.vector_storage.embedding_model,
-                    'collection_name': self.vector_storage.collection_name,
-                    'batch_size': self.batch_size
-                },
-                'storage_stats': {'error': str(e)},
-                'status': 'error'
-            }
-    
-    def clear_collection(self) -> Dict[str, Any]:
         """
         Clear all documents from the ChromaDB collection.
         

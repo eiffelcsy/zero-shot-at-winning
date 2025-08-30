@@ -60,20 +60,17 @@ class TextChunker:
         Returns:
             List of text chunks
         """
-        # Handle empty or whitespace-only text
         if not text or not text.strip():
             logger.debug("Empty or whitespace-only text provided, returning empty list")
             return []
         
         try:
-            # Use LangChain's text splitter to create chunks
             raw_chunks = self.splitter.split_text(text)
             
-            # Create text chunks with sequential indexing
             chunks = []
             chunk_index = 0
             for chunk_content in raw_chunks:
-                if chunk_content.strip():  # Only include non-empty chunks
+                if chunk_content.strip():
                     chunk = TextChunk(content=chunk_content, chunk_index=chunk_index)
                     chunks.append(chunk)
                     chunk_index += 1

@@ -151,8 +151,7 @@ with st.sidebar:
     # Sidebar header with logo
     st.markdown("""
         <div class="sidebar-logo">
-            <h2>TikTok</h2>
-            <p style="color: rgba(255,255,255,0.8); margin: 0.5rem 0 0 0; font-size: 0.9rem;">Geo-Compliance System</p>
+            <h1>Geo-Compliance System</h1>
         </div>
     """, unsafe_allow_html=True)
     
@@ -164,31 +163,7 @@ with st.sidebar:
         ["Compliance Checker", "Upload Regulations", "Analytics Dashboard"],
         label_visibility="collapsed"
     )
-    
-    # Quick stats in sidebar
-    st.markdown("---")
-    st.markdown("### Quick Stats")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-            <div class="stats-card">
-                <p class="stats-number">{}</p>
-                <p class="stats-label">Analyses</p>
-            </div>
-        """.format(len(st.session_state.analysis_history)), unsafe_allow_html=True)
-    
-    with col2:
-        compliant_count = sum(1 for analysis in st.session_state.analysis_history 
-                            if analysis.get('flag', '').lower() == 'yes')
-        st.markdown("""
-            <div class="stats-card">
-                <p class="stats-number">{}</p>
-                <p class="stats-label">Flagged</p>
-            </div>
-        """.format(compliant_count), unsafe_allow_html=True)
-    
-    # Help section
+    # Help section at bottom
     st.markdown("---")
     st.markdown("### Need Help?")
     with st.expander("How to Use"):
@@ -210,14 +185,6 @@ with st.sidebar:
         - Monitor system performance
         """)
     
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-        <div style="text-align: center; color: rgba(255,255,255,0.6); font-size: 0.8rem;">
-            <p>TikTok TechJam 2025</p>
-            <p>Built by Zero Shot at Winning</p>
-        </div>
-    """, unsafe_allow_html=True)
 
 # ================================================
 # Page 1: Enhanced Compliance Checker
@@ -226,8 +193,7 @@ if page == "Compliance Checker":
     # Main header
     st.markdown("""
         <div class="main-header">
-            <h1>Geo-Regulation Compliance System</h1>
-            <p>Automated flagging of features requiring location-specific compliance logic with audit-ready reasoning and regulation mapping</p>
+            <h1>Compliance Checker</h1>
         </div>
     """, unsafe_allow_html=True)
     
@@ -541,7 +507,7 @@ elif page == "Analytics Dashboard":
 st.markdown("---")
 st.markdown("""
     <div style="text-align: center; color: rgba(255,255,255,0.6);">
-        <p><strong>TikTok TechJam 2025</strong> | Geo-Regulation Compliance System</p>
+        <p><strong>TikTok TechJam 2025</strong> | Geo-Compliance System</p>
         <p>Built with Streamlit • Team Zero Shot at Winning</p>
     </div>
 """, unsafe_allow_html=True)

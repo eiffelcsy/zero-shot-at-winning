@@ -31,10 +31,10 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 - **Extensible Architecture**: Supports adding domain-specific knowledge or alternative detection methods
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, LangChain
+- **Backend**: Python, FastAPI, LangChain, LangGraph, ChromaDB Cloud
 - **Frontend**: Streamlit
 - **Containerization**: Docker, Docker Compose
-- **Data**: Synthetic hackathon dataset + additional regulatory knowledge
+- **Data**: No additional datasets used, all data is found in problem statement.
 
 ## Installation & Setup
 
@@ -69,5 +69,5 @@ Watch our 3-minute demo: YouTube Link
 ## Team
 - Eiffel Chong Shiang Yih
 - Ryan Soh Jing Zhi
-- Fu Qiang
+- Teo Fu Qiang
 - Lim Yixuan

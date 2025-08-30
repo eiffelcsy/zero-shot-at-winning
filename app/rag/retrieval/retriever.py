@@ -36,14 +36,12 @@ class RAGRetriever:
         if include is None:
             include = ['metadatas', 'documents', 'distances']
         
-        # Query the ChromaDB collection
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,
             include=include
         )
         
-        # Transform the ChromaDB response format to our expected format
         return self._format_results(results)
     
 
@@ -59,8 +57,6 @@ class RAGRetriever:
         """
         formatted_results = []
         
-        # ChromaDB returns results in nested lists format
-        # Extract the first (and typically only) query result
         if not raw_results['ids'] or not raw_results['ids'][0]:
             return []
         
@@ -69,7 +65,6 @@ class RAGRetriever:
         metadatas = raw_results.get('metadatas', [[]])[0]
         distances = raw_results.get('distances', [[]])[0]
         
-        # Combine all the data into structured format
         for i, doc_id in enumerate(ids):
             result = {
                 'id': doc_id,

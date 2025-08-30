@@ -55,10 +55,6 @@ class MockQueryProcessor:
     async def expand_query(self, query):
         """Return expanded query"""
         return f"{query} regulatory compliance legal requirements"
-    
-    async def generate_multiple_queries(self, query, count=5):
-        """Return multiple query variations"""
-        return [f"{query} variation {i}" for i in range(count)]
 
 class MockRAGRetriever:
     """Mock RAG Retriever"""

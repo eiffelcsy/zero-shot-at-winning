@@ -175,29 +175,6 @@ class VectorStorage:
             logger.error(f"Failed to store chunks: {e}")
             raise ValueError(f"Chunk storage failed: {e}")
     
-    def get_collection_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about the ChromaDB collection.
-        
-        Returns:
-            Dictionary with collection statistics
-        """
-        try:
-            count = self.collection.count()
-            return {
-                'collection_name': self.collection_name,
-                'total_documents': count,
-                'embedding_model': self.embedding_model
-            }
-        except Exception as e:
-            logger.error(f"Failed to get collection stats: {e}")
-            return {
-                'collection_name': self.collection_name,
-                'total_documents': 0,
-                'embedding_model': self.embedding_model,
-                'error': str(e)
-            }
-    
     def clear_collection(self) -> bool:
         """
         Clear all documents from the collection.

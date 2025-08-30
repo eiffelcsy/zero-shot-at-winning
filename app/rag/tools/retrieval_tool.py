@@ -20,14 +20,6 @@ class RetrievalToolInput(BaseModel):
 
 
 class RetrievalTool(BaseTool):
-    """
-    A tool that provides document retrieval capabilities for agents.
-    
-    This tool combines query enhancement and vector-based document retrieval
-    to find relevant documents. Returns raw retrieval results for downstream
-    processing and synthesis.
-    """
-    
     name: str = "retrieval_tool"
     description: str = "Retrieves relevant documents for downstream synthesis. Combines query enhancement and vector-based document retrieval."
     args_schema: Type[BaseModel] = RetrievalToolInput
@@ -55,7 +47,6 @@ class RetrievalTool(BaseTool):
         if retriever is None:
             raise ValueError("retriever is required")
         
-        # Pass the required fields through the parent constructor
         super().__init__(
             query_processor=query_processor,
             retriever=retriever,
@@ -80,7 +71,6 @@ class RetrievalTool(BaseTool):
         Returns:
             List of raw retrieval result dictionaries from ChromaDB
         """
-        # Since the original implementation was async, we'll raise an error for sync calls
         raise NotImplementedError("RetrievalTool only supports async execution. Use async invocation.")
     
     async def _arun(
@@ -101,7 +91,6 @@ class RetrievalTool(BaseTool):
             Dictionary containing raw_results (list), enhanced_queries (list), and enhanced_query (str)
         """
         try:
-            # Handle empty or None queries
             if not query or not query.strip():
                 return {
                     "raw_results": [], 
@@ -109,10 +98,8 @@ class RetrievalTool(BaseTool):
                     "enhanced_query": ""
                 }
             
-            # Step 1: Enhance the query
             enhanced_queries = await self.query_processor.expand_query(query)
             
-            # Step 2: Retrieve documents
             kwargs = {"n_results_per_query": n_results_per_query}
                 
             raw_results = []
@@ -120,7 +107,6 @@ class RetrievalTool(BaseTool):
                 res = await self._retrieve_documents(enhanced_query, **kwargs)
                 raw_results.extend(res)
             
-            # Return raw results and enhanced queries for downstream synthesis
             return {
                 "raw_results": raw_results, 
                 "enhanced_queries": enhanced_queries,
@@ -128,7 +114,6 @@ class RetrievalTool(BaseTool):
             
         except Exception as e:
             logger.error(f"Error in retrieval tool run: {e}")
-            # Return empty results on error to maintain stability
             return {
                 "raw_results": [], 
                 "enhanced_queries": [],
@@ -148,10 +133,8 @@ class RetrievalTool(BaseTool):
         try:
             n_results_per_query = kwargs.get('n_results_per_query', 5)
             
-            # Generate embedding for the enhanced query
             query_embedding = await self._generate_query_embedding(enhanced_query)
             
-            # Retrieve documents using the embedding
             return self.retriever.retrieve(
                 query_embedding=query_embedding,
                 n_results=n_results_per_query
@@ -189,7 +172,6 @@ class RetrievalTool(BaseTool):
         Returns:
             True if inputs are valid
         """
-        # For MVP, we just check that query is provided and is a string
         if query is None:
             return False
         

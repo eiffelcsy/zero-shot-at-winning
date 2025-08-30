@@ -195,30 +195,6 @@ class TestVectorStorage:
     
     @patch('rag.ingestion.vector_storage.get_chroma_client')
     @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
-    def test_get_collection_stats(self, mock_openai_embeddings, mock_get_chroma_client):
-        """Test getting collection statistics."""
-        from rag.ingestion.vector_storage import VectorStorage
-        
-        # Setup mocks
-        mock_embeddings_instance = Mock()
-        mock_openai_embeddings.return_value = mock_embeddings_instance
-        
-        mock_collection = Mock()
-        mock_collection.count.return_value = 42
-        mock_client = Mock()
-        mock_client.get_or_create_collection.return_value = mock_collection
-        mock_get_chroma_client.return_value = mock_client
-        
-        storage = VectorStorage(embedding_model="test-model", collection_name="test-collection")
-        stats = storage.get_collection_stats()
-        
-        assert stats['collection_name'] == 'test-collection'
-        assert stats['total_documents'] == 42
-        assert stats['embedding_model'] == 'test-model'
-        mock_collection.count.assert_called_once()
-    
-    @patch('rag.ingestion.vector_storage.get_chroma_client')
-    @patch('rag.ingestion.vector_storage.OpenAIEmbeddings')
     def test_clear_collection(self, mock_openai_embeddings, mock_get_chroma_client):
         """Test clearing all documents from collection."""
         from rag.ingestion.vector_storage import VectorStorage

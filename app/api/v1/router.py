@@ -187,25 +187,7 @@ async def upload_pdf_files(
             status_code=500, 
             detail=f"Internal server error during PDF processing: {str(e)}"
         )
-
-@router.get("/upload-stats", response_model=PipelineStatsResponse)
-async def get_upload_stats() -> PipelineStatsResponse:
-    """
-    Get statistics about the PDF upload pipeline and ChromaDB storage.
-    
-    Returns:
-        PipelineStatsResponse with current pipeline configuration and storage stats
-    """
-    try:
-        stats = pipeline.get_pipeline_stats()
-        return PipelineStatsResponse(**stats)
-    except Exception as e:
-        logger.error(f"Error getting pipeline stats: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error retrieving pipeline statistics: {str(e)}"
-        )
-
+        
 @router.delete("/clear-documents")
 async def clear_document_collection() -> Dict[str, Any]:
     """
