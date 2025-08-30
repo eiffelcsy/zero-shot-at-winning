@@ -21,32 +21,25 @@ Validate the accuracy and relevance of screening and research analyses, ensure r
 ## Output Requirements
 Return ONLY valid JSON matching this exact schema:
 {{
-    "needs_geo_logic": "YES|NO|REVIEW",
-    "reasoning": {{
-        "executive_summary": "Key validation findings and compliance determination",
-        "screening_validation": "Assessment of screening agent's analysis accuracy and evidence basis",
-        "research_validation": "Evaluation of research quality, document relevance, and source authority",
-        "evidence_synthesis": "Integration of screening reasoning with research evidence, referencing specific excerpts",
-        "regulatory_analysis": "Analysis of identified regulations with excerpt references supporting conclusions",
-        "discrepancy_resolution": "How any conflicts between screening and research were resolved",
-        "final_assessment": "Validated compliance conclusion with supporting evidence citations"
-    }},
-    "related_regulations": [
-        {{
-            "regulation_name": "exact regulation name from research analysis",
-            "excerpt": "exact verbatim quote from regulation",
-            "relevance_score": 0.0-1.0,
-            "source_filename": "source filename from research analysis"
-        }}
-    ],
-    "confidence": 0.0-1.0,
     "agent": "ValidationAgent",
-    "validation_metadata": {{
+    "feature_name": "Name of the feature being validated",
+    "final_decision": "COMPLIANT | NON_COMPLIANT | NEEDS_REVIEW",
+    "confidence_score": 0.0-1.0,
+    "reasoning": "Detailed reasoning for the final decision",
+    "compliance_requirements": [
+        "List of compliance requirements that must be met"
+    ],
+    "risk_assessment": "Overall risk assessment",
+    "recommendations": [
+        "Recommendations for compliance"
+    ],
+    "tiktok_terminology_used": true,
+    "validation_metadata": {
         "agent": "ValidationAgent",
         "evidence_pieces_reviewed": 0,
         "regulations_cited": 0,
         "timestamp": "ISO timestamp will be added automatically"
-    }}
+    }
 }}
 
 ## Validation Framework
