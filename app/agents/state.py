@@ -21,9 +21,8 @@ class ComplianceState(TypedDict):
     research_completed: Optional[bool]
     research_timestamp: Optional[str]
     
-    # Validation agent outputs (for future implementation)
+    # Validation agent outputs
     validation_analysis: Optional[Dict[str, Any]]
-    final_decision: Optional[Dict[str, Any]]
     validation_completed: Optional[bool]
     validation_timestamp: Optional[str]
     validation_error: Optional[str]

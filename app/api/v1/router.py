@@ -1,12 +1,13 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 from rag.ingestion.pipeline import PDFIngestionPipeline
 from chroma.chroma_connection import get_chroma_collection
 from agents.orchestrator import ComplianceOrchestrator
+from agents.feedback.learning import LearningAgent
 import os
 import io
 
@@ -597,12 +598,10 @@ async def run_compliance_analysis(
         screening_analysis = orchestrator_result.get("screening_analysis")
         research_analysis = orchestrator_result.get("research_analysis")
         validation_analysis = orchestrator_result.get("validation_analysis")
-        final_decision = orchestrator_result.get("final_decision")
         
         logger.info(f"Screening analysis present: {screening_analysis is not None}")
         logger.info(f"Research analysis present: {research_analysis is not None}")
         logger.info(f"Validation analysis present: {validation_analysis is not None}")
-        logger.info(f"Final decision present: {final_decision is not None}")
         
         # Safely extract agents completed list
         agents_completed = orchestrator_result.get("agents_completed", [])

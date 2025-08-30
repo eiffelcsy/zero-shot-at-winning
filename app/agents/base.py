@@ -7,7 +7,7 @@ import logging
 import asyncio
 import json
 from datetime import datetime
-from app.logs.logging_config import get_logger
+from logs.logging_config import get_logger
 
 
 class BaseComplianceAgent:

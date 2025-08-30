@@ -1,7 +1,7 @@
 import re
 from typing import List, Optional, Any
 import logging
-from agents.prompts.query_prompt import build_query_expansion_prompt, build_query_variation_prompt
+from agents.prompts.query_prompt import build_query_expansion_prompt
 
 logger = logging.getLogger(__name__)
 

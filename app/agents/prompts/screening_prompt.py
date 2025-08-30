@@ -247,5 +247,5 @@ Remember: Your analysis directly impacts downstream compliance workflows. Compre
 def build_screening_prompt(memory_overlay: str = "") -> PromptTemplate:
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "context_documents"],
-        template=SCREENING_PROMPT
+        template=memory_overlay + "\n" + SCREENING_PROMPT
     )

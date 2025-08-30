@@ -102,7 +102,6 @@ class ComplianceOrchestrator:
             screening_analysis = final_state.get("screening_analysis", {})
             research_analysis = final_state.get("research_analysis", {})
             validation_analysis = final_state.get("validation_analysis", {})
-            final_decision = final_state.get("final_decision", {})
             
             # Determine which agents completed
             agents_completed = []
@@ -152,7 +151,6 @@ class ComplianceOrchestrator:
                 "screening_analysis": screening_analysis,
                 "research_analysis": research_analysis,
                 "validation_analysis": validation_analysis,
-                "final_decision": final_decision or validation_analysis
             }
             
         except Exception as e:
@@ -176,7 +174,6 @@ class ComplianceOrchestrator:
                 "screening_analysis": None,
                 "research_analysis": None,
                 "validation_analysis": None,
-                "final_decision": None
             }
     
     def get_workflow_status(self) -> Dict[str, Any]:

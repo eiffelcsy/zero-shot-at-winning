@@ -33,18 +33,6 @@ class ScreeningAgent(BaseComplianceAgent):
     def _setup_chain(self):
         """Setup LangChain prompt and parser with TikTok terminology context integration"""
         screening_prompt = build_screening_prompt(self.memory_overlay)
-        
-        # Enhanced logging for memory overlay integration
-        if self.memory_overlay:
-            self.logger.info(f"Screening agent initialized with memory overlay ({len(self.memory_overlay)} characters)")
-            if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-                self.logger.info("TikTok terminology found in memory overlay - screening will understand TikTok acronyms")
-                self.logger.info("Can properly assess: NR, PF, GH, CDS, DRT, LCP, Redline, Softblock, Spanner, ShadowMode, T5, ASL, Glow, NSP, Jellybean, EchoTrace, BB, Snowcap, FR, IMT")
-            else:
-                self.logger.warning("TikTok terminology NOT found in memory overlay - screening may miss TikTok-specific compliance indicators")
-        else:
-            self.logger.warning("Screening agent initialized with NO memory overlay - will lack TikTok terminology context")
-        
         self.create_chain(screening_prompt, ScreeningOutput)
     
     def update_memory(self, new_memory_overlay: str):
@@ -232,6 +220,7 @@ class ScreeningAgent(BaseComplianceAgent):
         
         # Check if any TikTok terminology appears in the result
         result_text = json.dumps(result, default=str).lower()
+        self.logger.info(f"Screening result text: {result_text}")
         
         # Common TikTok terminology patterns
         tiktok_patterns = [

@@ -111,22 +111,11 @@ Return ONLY the search query string, nothing else.
 def build_research_prompt(memory_overlay: str = "") -> PromptTemplate:
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "screening_analysis", "evidence_found"],
-        template=RESEARCH_PROMPT
+        template=memory_overlay + RESEARCH_PROMPT
     )
 
-def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:
-    # Build the template with memory overlay integration
-    template = SEARCH_QUERY_GENERATION
-    
-    # If memory overlay contains TikTok terminology, add it to the template
-    if memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in memory_overlay:
-        template = f"""
-{memory_overlay}
-
-{SEARCH_QUERY_GENERATION}
-"""
-    
+def build_search_query_prompt(memory_overlay: str = "") -> PromptTemplate:    
     return PromptTemplate(
         input_variables=["screening_analysis"],
-        template=template
+        template=memory_overlay + "\n" + SEARCH_QUERY_GENERATION
     )

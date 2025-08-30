@@ -5,14 +5,18 @@ You are helping to expand a compliance and regulatory query for better document 
 
 Original query: "{query}"
 
-Generate relevant additional terms and phrases that work as queries on their own and would help find documents related to this query. Focus on:
-- Legal and regulatory synonyms
-- Related compliance concepts
-- Jurisdictional variations
-- Technical implementation terms
-- Related regulatory frameworks
+Generate 5 additional specific queries that would help find related compliance documents. Each query should:
+- Maintain specific legal references and bill numbers when present
+- Include technical implementation terms from the original
+- Add related specific regulatory concepts
+- Be concrete enough for precise document matching
 
-Provide only the 5 most relevant additional terms as a comma-separated list, without explanations or the original query.
+Focus on creating variations that a compliance professional would actually search for, not generic categories.
+
+Provide only the 5 most relevant additional queries as a comma-separated list, without explanations or the original query.
+Do not generate more than 5 queries, do not use commas in the queries.
+
+Output format: query1, query2, query3, query4, query5
 """
 
 QUERY_VARIATION_PROMPT = """

@@ -1,7 +1,7 @@
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from .base import BaseComplianceAgent
 from .prompts.validation_prompt import build_validation_prompt
 from .memory.memory_pg import PostgresMemoryStore
@@ -10,22 +10,19 @@ from datetime import datetime
 import json, os, sys
 
 class RelatedRegulation(BaseModel):
-    name: str = Field(description="Regulation name")
-    jurisdiction: str = Field(description="Jurisdiction")
-    section: str = Field(description="Specific section")
-    url: HttpUrl = Field(description="URL to regulation")
-    evidence_excerpt: str = Field(description="Supporting evidence text")
+    regulation_name: str = Field(description="Regulation name")
+    excerpt: str = Field(description="Excerpt from regulation")
+    relevance_score: float = Field(description="Relevance score")
+    source_filename: str = Field(description="Source filename")
 
 class ValidationOutput(BaseModel):
+    needs_geo_logic: Literal["YES", "NO", "REVIEW"] = Field(description="Final verdict if the feature needs geo-compliance logic or not")
+    reasoning: str = Field(description="Reasoning for the final verdict, substantive, supported by the evidence from the screening and research analyses")
+    validation_reasoning: Dict[str, Any] = Field(description="Validation reasoning")
+    related_regulations: List[RelatedRegulation] = Field(description="Related regulations")
+    confidence: float = Field(description="Confidence score")
     agent: str = Field(description="Agent name")
-    feature_name: str = Field(description="Name of the feature being validated")
-    final_decision: str = Field(description="Final compliance decision: COMPLIANT, NON_COMPLIANT, NEEDS_REVIEW")
-    confidence_score: float = Field(description="Confidence in the decision (0.0-1.0)")
-    reasoning: str = Field(description="Detailed reasoning for the final decision")
-    compliance_requirements: List[str] = Field(description="List of compliance requirements that must be met")
-    risk_assessment: str = Field(description="Overall risk assessment")
-    recommendations: List[str] = Field(description="Recommendations for compliance")
-    tiktok_terminology_used: bool = Field(description="Whether TikTok terminology was used in validation")
+    validation_metadata: Dict[str, Any] = Field(description="Validation metadata")
 
 class ValidationAgent(BaseComplianceAgent):
     """Final decision-maker agent - validates compliance requirements with TikTok terminology context"""
@@ -118,7 +115,6 @@ class ValidationAgent(BaseComplianceAgent):
             
             # Log successful validation completion
             self.logger.info(f"Validation analysis completed for '{feature_name}'")
-            self.logger.info(f"Final decision: {enhanced_result.get('final_decision', 'UNKNOWN')}")
             self.logger.info(f"Confidence score: {enhanced_result.get('confidence_score', 0.0)}")
             self.logger.info(f"TikTok terminology used: {enhanced_result.get('tiktok_terminology_used', False)}")
             
@@ -128,7 +124,6 @@ class ValidationAgent(BaseComplianceAgent):
             # Return final decision for LangGraph in enhanced format
             return {
                 "validation_analysis": enhanced_result,
-                "final_decision": enhanced_result,
                 "validation_completed": True,
                 "validation_timestamp": datetime.now().isoformat(),
                 "next_step": "complete"
@@ -138,21 +133,14 @@ class ValidationAgent(BaseComplianceAgent):
             self.log_error(e, state, "Validation agent process failed")
             return {
                 "validation_analysis": {
-                    "agent": "ValidationAgent",
+                    "needs_geo_logic": "ERROR",
                     "error": str(e),
                     "feature_name": state.get("feature_name", "unknown"),
-                    "final_decision": "ERROR",
-                    "confidence_score": 0.0,
+                    "confidence": 0.0,
                     "reasoning": f"Validation failed due to error: {str(e)}",
-                    "compliance_requirements": [],
-                    "risk_assessment": "ERROR",
-                    "recommendations": ["Fix validation error and retry"],
-                    "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or "")
-                },
-                "final_decision": {
-                    "agent": "ValidationAgent",
-                    "error": str(e),
-                    "tiktok_terminology_used": "TIKTOK TERMINOLOGY REFERENCE" in (self.memory_overlay or "")
+                    "validation_reasoning": {},
+                    "related_regulations": [],
+                    "validation_metadata": {}
                 },
                 "validation_completed": False,
                 "validation_timestamp": datetime.now().isoformat(),
@@ -174,20 +162,17 @@ class ValidationAgent(BaseComplianceAgent):
             enhanced_result = {
                 "agent": "ValidationAgent",
                 "feature_name": feature_name,
-                "final_decision": result.get("final_decision", "NEEDS_REVIEW"),
-                "confidence_score": float(result.get("confidence_score", 0.0)),
+                "needs_geo_logic": result.get("needs_geo_logic", "REVIEW"),
+                "confidence_score": float(result.get("confidence", 0.0)),
                 "reasoning": result.get("reasoning", ""),
-                "compliance_requirements": result.get("compliance_requirements", []),
-                "risk_assessment": result.get("risk_assessment", "UNKNOWN"),
-                "recommendations": result.get("recommendations", []),
-                "tiktok_terminology_used": self._check_tiktok_terminology_usage(result),
-                "memory_overlay_length": len(self.memory_overlay) if self.memory_overlay else 0,
-                "validation_timestamp": datetime.now().isoformat()
+                "validation_reasoning": result.get("validation_reasoning", {}),
+                "related_regulations": result.get("related_regulations", []),
+                "validation_metadata": result.get("validation_metadata", {}),
             }
             
             # Log the enhancement process
             self.logger.info(f"Enhanced validation result with {len(enhanced_result)} fields")
-            self.logger.info(f"TikTok terminology usage detected: {enhanced_result['tiktok_terminology_used']}")
+            self.logger.info(f"TikTok terminology usage detected: {enhanced_result['validation_reasoning']}")
             
             return enhanced_result
             

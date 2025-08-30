@@ -277,7 +277,7 @@ if page == "Compliance Checker":
             # Get values from validation_result
             validation_result = result.get("validation_result", {})
             needs_geo = validation_result.get("needs_geo_logic", "REVIEW")
-            confidence = validation_result.get("confidence", 0)
+            confidence = validation_result.get("confidence_score", 0)
             
             with col1:
                 st.markdown("Does this feature need geo-specific compliance logic?")
@@ -317,14 +317,12 @@ if page == "Compliance Checker":
             metadata = validation_result.get("validation_metadata", {})
             st.markdown("### Analysis Details")
             
-            meta_cols = st.columns(4)
+            meta_cols = st.columns(3)
             with meta_cols[0]:
                 st.metric("Evidence Reviewed", metadata.get("evidence_pieces_reviewed", 0))
             with meta_cols[1]:
                 st.metric("Regulations Cited", metadata.get("regulations_cited", 0))
             with meta_cols[2]:
-                st.metric("Agent", metadata.get("agent", "Unknown"))
-            with meta_cols[3]:
                 st.metric("Timestamp", metadata.get("timestamp", "Unknown"))
 
         # Add Full JSON Output section

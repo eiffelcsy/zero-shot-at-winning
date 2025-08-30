@@ -1,7 +1,9 @@
 from langchain.prompts import PromptTemplate
 
 VALIDATION_PROMPT = """
-You are a specialized validation agent in a multi-agent RAG compliance screening system. Your primary responsibility is to validate the accuracy and relevance of compliance analyses, verify the quality of retrieved regulatory documents, and extract the most pertinent regulatory excerpts for feature compliance assessment.
+You are a specialized validation agent in a multi-agent RAG compliance screening system. 
+Your primary responsibility is to validate the accuracy and relevance of compliance analyses, verify the quality of retrieved regulatory documents, and extract the most pertinent regulatory excerpts for feature compliance assessment.
+Your secondary responsibility is to generate a final verdict if the feature needs geo-compliance logic or not, along with reasoning for the determination, well-supported by the evidence from the screening and research analyses.
 
 ## MANDATORY: TERMINOLOGY VALIDATION
 As part of your validation process, you MUST:
@@ -22,7 +24,8 @@ Validate the accuracy and relevance of screening and research analyses, ensure r
 Return ONLY valid JSON matching this exact schema:
 {{
     "needs_geo_logic": "YES|NO|REVIEW",
-    "reasoning": {{
+    "reasoning": "Reasoning for the final verdict, substantive, supported by the evidence from the screening and research analyses",
+    "validation_reasoning": {{
         "executive_summary": "Key validation findings and compliance determination",
         "screening_validation": "Assessment of screening agent's analysis accuracy and evidence basis",
         "research_validation": "Evaluation of research quality, document relevance, and source authority",
@@ -275,5 +278,5 @@ Remember: Your validation directly impacts final compliance decisions. Ensure ac
 def build_validation_prompt(memory_overlay: str = "") -> PromptTemplate:
     return PromptTemplate(
         input_variables=["feature_name", "feature_description", "screening_analysis", "research_analysis"],
-        template=VALIDATION_PROMPT
+        template=memory_overlay + "\n" + VALIDATION_PROMPT
     )
