@@ -10,7 +10,7 @@ FEATURE: {feature}
 SCREENING: {screening}
 RESEARCH: {research}
 VALIDATION (new ValidationOutput schema): {decision}
-USER_FEEDBACK (is_correct which is either "yes" or "no", reasoning which is what needs to be changed): {feedback}
+USER_FEEDBACK (is_correct which is either "yes" or "no", notes which is what needs to be changed): {feedback}
 
 ## Task
 Generate agent-specific reflections that can be shown to each agent in future runs as examples of what to do or avoid.
@@ -87,6 +87,8 @@ Constraints
 - If is_correct == "no": produce AT LEAST ONE glossary item and AT LEAST ONE few-shot for the most impacted agent (usually "validation").
 - Deduplicate terms/examples using concise wording; avoid near-duplicates.
 - Keep examples compact but specific (reference COPPA, CA under-16 opt-in, TTL, etc., when relevant).
+- If USER_FEEDBACK contains a "GLOSSARY_CANDIDATES" list, COPY TERM NAMES VERBATIM
+  (do not expand acronyms in the "term" field; expansions go in "expansion")
 """
 
 
