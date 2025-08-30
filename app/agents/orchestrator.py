@@ -4,34 +4,56 @@ from .screening import ScreeningAgent
 from .research import ResearchAgent
 from .validation import ValidationAgent
 # from .learning import LearningAgent
+from .memory.combined_memory import get_all_combined_overlays
 from typing import Dict, Any, Optional
 import uuid
 from datetime import datetime
+from logs.logging_config import get_logger
 
 class ComplianceOrchestrator:
     """LangGraph-powered multi-agent orchestrator with memory overlay support"""
     
-    def __init__(self, memory_overlay: str = ""):
+    def __init__(self, memory_overlay: str = "", use_combined_memory: bool = True):
         # Store configuration
         self.memory_overlay = memory_overlay
+        self.use_combined_memory = use_combined_memory
         
-        # Initialize agents with memory overlay support
-        self.screening_agent = ScreeningAgent(memory_overlay=memory_overlay)
-        self.research_agent = ResearchAgent(memory_overlay=memory_overlay)
-        self.validation_agent = ValidationAgent(memory_overlay=memory_overlay)
+        # Initialize logger
+        self.logger = get_logger(__name__)
+
+        # Initialize agents with agent-specific memory overlays
+        if use_combined_memory:
+            # Get combined overlays (TikTok + agent-specific few-shot examples)
+            combined_overlays = get_all_combined_overlays()
+            self.screening_agent = ScreeningAgent(memory_overlay=combined_overlays["screening"])
+            self.research_agent = ResearchAgent(memory_overlay=combined_overlays["research"])
+            self.validation_agent = ValidationAgent(memory_overlay=combined_overlays["validation"])
+        else:
+            # Use traditional single memory overlay for all agents
+            self.screening_agent = ScreeningAgent(memory_overlay=memory_overlay)
+            self.research_agent = ResearchAgent(memory_overlay=memory_overlay)
+            self.validation_agent = ValidationAgent(memory_overlay=memory_overlay)
         # self.learning_agent = LearningAgent()
         
         # Build workflow
         self.workflow = self._build_workflow()
     
-    def update_agent_memory(self, new_memory_overlay: str):
+    def update_agent_memory(self, new_memory_overlay: str = None):
         """Update memory overlay for all agents and rebuild workflow"""
-        self.memory_overlay = new_memory_overlay
+        if new_memory_overlay:
+            self.memory_overlay = new_memory_overlay
         
-        # Update each agent's memory
-        self.screening_agent.update_memory(new_memory_overlay)
-        self.research_agent.update_memory(new_memory_overlay)
-        # self.validation_agent.update_memory()
+        if self.use_combined_memory:
+            # Get fresh combined overlays
+            combined_overlays = get_all_combined_overlays()
+            self.screening_agent.update_memory(combined_overlays["screening"])
+            self.research_agent.update_memory(combined_overlays["research"])
+            self.validation_agent.update_memory(combined_overlays["validation"])
+        else:
+            # Update each agent's memory with the same overlay
+            self.screening_agent.update_memory(self.memory_overlay)
+            self.research_agent.update_memory(self.memory_overlay)
+            self.validation_agent.update_memory(self.memory_overlay)
         
         # Rebuild the workflow with updated agents
         self.workflow = self._build_workflow()
@@ -240,10 +262,16 @@ class ComplianceOrchestrator:
         return {
             "has_memory_overlay": bool(self.memory_overlay),
             "memory_overlay_length": len(self.memory_overlay),
+            "use_combined_memory": self.use_combined_memory,
             "agents_initialized": {
                 "screening": bool(self.screening_agent),
                 "research": bool(self.research_agent),
-                # "validation": bool(self.validation_agent),
+                "validation": bool(self.validation_agent),
                 # "learning": bool(self.learning_agent)
+            },
+            "agent_memory_info": {
+                "screening_overlay_length": len(self.screening_agent.memory_overlay) if self.screening_agent else 0,
+                "research_overlay_length": len(self.research_agent.memory_overlay) if self.research_agent else 0,
+                "validation_overlay_length": len(self.validation_agent.memory_overlay) if self.validation_agent else 0,
             }
         }

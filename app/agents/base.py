@@ -35,8 +35,13 @@ class BaseComplianceAgent:
                 self.logger.info(f"Agent {name} has access to TikTok terminology context")
             else:
                 self.logger.warning(f"Agent {name} memory overlay missing TikTok terminology")
+            
+            if "FEW-SHOT EXAMPLES" in self.memory_overlay:
+                self.logger.info(f"Agent {name} has access to few-shot examples")
+            else:
+                self.logger.info(f"Agent {name} memory overlay missing few-shot examples")
         else:
-            self.logger.warning(f"Agent {name} initialized with NO memory overlay - will lack TikTok context")
+            self.logger.warning(f"Agent {name} initialized with NO memory overlay - will lack context")
     
     def create_chain(self, prompt_template: PromptTemplate, output_model: Optional[BaseModel] = None):
         """Standard LangChain setup with enhanced error checking and memory overlay integration"""
@@ -57,10 +62,17 @@ class BaseComplianceAgent:
             self.logger.info("Chain created without output model")
         
         # Verify memory overlay integration
-        if self.memory_overlay and "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
-            self.logger.info(f"Chain for {self.name} includes TikTok terminology context")
+        memory_components = []
+        if self.memory_overlay:
+            if "TIKTOK TERMINOLOGY REFERENCE" in self.memory_overlay:
+                memory_components.append("TikTok terminology")
+            if "FEW-SHOT EXAMPLES" in self.memory_overlay:
+                memory_components.append("few-shot examples")
+        
+        if memory_components:
+            self.logger.info(f"Chain for {self.name} includes: {', '.join(memory_components)}")
         else:
-            self.logger.warning(f"Chain for {self.name} missing TikTok terminology context")
+            self.logger.warning(f"Chain for {self.name} missing memory context")
     
     def update_memory(self, new_memory_overlay: str):
         """Update memory overlay and rebuild chain with new context"""

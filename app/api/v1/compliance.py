@@ -5,8 +5,8 @@ from app.agents.feedback.learning import LearningAgent
 
 router = APIRouter()
 
-# Initialize orchestrator
-orchestrator = ComplianceOrchestrator(kb_dir="data/kb")
+# Initialize orchestrator with combined memory system
+orchestrator = ComplianceOrchestrator(use_combined_memory=True)
 learning_agent = LearningAgent()
 
 @router.post("/analyze-feature")

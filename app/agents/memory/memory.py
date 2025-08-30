@@ -145,19 +145,19 @@ class MemoryStore:
         except Exception:
             pass
 
-        # Few-shots: include last 2 only to keep prompts small
+        # Few-shots: include ALL examples to provide comprehensive context
         few_path = self.paths[f"few_{agent}"]
-        last_two = []
+        all_examples = []
         try:
             lines = open(few_path, "r", encoding="utf-8").read().strip().splitlines()
-            for line in lines[-2:]:
+            for line in lines:  # Changed from lines[-2:] to lines to include ALL examples
                 if line.strip():
-                    last_two.append(json.loads(line))
+                    all_examples.append(json.loads(line))
         except Exception:
             pass
-        if last_two:
+        if all_examples:
             overlay.append("\nFEW-SHOT EXAMPLES:")
-            for ex in last_two:
+            for ex in all_examples:
                 overlay.append(json.dumps(ex, ensure_ascii=False))
 
         return "MEMORY OVERLAY\n" + "\n".join(overlay) if overlay else ""

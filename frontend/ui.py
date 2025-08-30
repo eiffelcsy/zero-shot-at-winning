@@ -302,7 +302,7 @@ if page == "Compliance Checker":
             # Get values from validation_result
             validation_result = result.get("validation_result", {})
             needs_geo = validation_result.get("needs_geo_logic", "REVIEW")
-            confidence = validation_result.get("confidence_score", 0)
+            confidence = result.get("confidence_score", 0)
             
             with col1:
                 st.markdown("Does this feature need geo-specific compliance logic?")

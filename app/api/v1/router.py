@@ -91,24 +91,15 @@ pipeline = PDFIngestionPipeline(
 logger.info("PDF ingestion pipeline initialized")
 
 # Initialize the compliance orchestrator for LangGraph multi-agent workflow
-# Get proper TikTok terminology overlay from the new combined memory system
-from agents.memory.tiktok_memory import get_agent_overlays
-
+# Use the new combined memory system that includes both TikTok terminology and ALL fewshot examples
 try:
-    overlays = get_agent_overlays()
-    screening_overlay = overlays["screening"]
-    logger.info(f"Loaded TikTok terminology overlay ({len(screening_overlay)} characters)")
-    if "TIKTOK TERMINOLOGY REFERENCE" in screening_overlay:
-        logger.info("TikTok terminology successfully loaded and integrated")
-    else:
-        logger.warning("TikTok terminology NOT found in overlay")
+    # Initialize with combined memory system (TikTok + all fewshot examples)
+    compliance_orchestrator = ComplianceOrchestrator(use_combined_memory=True)
+    logger.info("Compliance orchestrator initialized with combined memory system (TikTok + all fewshot examples)")
 except Exception as e:
-    logger.error(f"Failed to load TikTok terminology overlay: {e}")
-    logger.warning("Compliance analysis will run without TikTok terminology context")
-    screening_overlay = ""
-
-compliance_orchestrator = ComplianceOrchestrator(memory_overlay=screening_overlay)
-logger.info("Compliance orchestrator initialized with TikTok terminology context")
+    logger.error(f"Failed to initialize combined memory system: {e}")
+    logger.warning("Falling back to orchestrator without memory overlay")
+    compliance_orchestrator = ComplianceOrchestrator(memory_overlay="", use_combined_memory=False)
 
 # ================================================
 # REGULATION UPLOAD ENDPOINTS
