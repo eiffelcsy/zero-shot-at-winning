@@ -1,3 +1,4 @@
+# app/agents/learning.py
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Literal, Callable
 from datetime import datetime
@@ -20,20 +21,13 @@ class GlossaryItem(BaseModel):
     expansion: str
     hints: List[str] = Field(default_factory=list)
 
-class KBSnippet(BaseModel):
-    jurisdiction: str
-    reg_code: str
-    name: str
-    section: str
-    url: HttpUrl
-    excerpt: str
-
 class FewShotExample(BaseModel):
     agent: Literal["screening", "research", "validation"]
     input_fields: Dict[str, Any]
     expected_output: Dict[str, Any]
     rationale: str
 
+# Kept for compatibility, but will be ignored
 class RuleOverlay(BaseModel):
     agent: Literal["screening", "validation"]
     rule_text: str  # short imperative rule
@@ -42,6 +36,7 @@ class LearningPlan(BaseModel):
     agent: Literal["LearningAgent"] = "LearningAgent"
     summary: str = Field(description="One-paragraph summary of what will be updated")
     glossary: List[GlossaryItem] = Field(default_factory=list)
+    # kb_snippets and rules are tolerated if the LLM returns them, but not applied
     kb_snippets: List[KBSnippet] = Field(default_factory=list)
     few_shots: List[FewShotExample] = Field(default_factory=list)
     rules: List[RuleOverlay] = Field(default_factory=list)
@@ -51,7 +46,8 @@ class LearningPlan(BaseModel):
 class LearningAgent(BaseComplianceAgent):
     """
     Learns from user feedback using ONLY the new ValidationOutput schema.
-    Applies updates to the Postgres-backed memory (glossary, rules, few-shots, KB snippets).
+    Applies updates to the Postgres-backed memory: **glossary** and **few-shots only**.
+    (KB snippets and rules are ignored.)
     """
 
     def __init__(self, feedback_file: str = str(DEFAULT_FEEDBACK), pg_conn: Optional[str] = None):
@@ -77,24 +73,12 @@ class LearningAgent(BaseComplianceAgent):
         """
         Requires in `state`:
           - validation_analysis: dict (NEW ValidationOutput schema)
-              {
-                "agent": str,
-                "feature_name": str,
-                "final_decision": "COMPLIANT"|"NON_COMPLIANT"|"NEEDS_REVIEW",
-                "confidence_score": float,
-                "reasoning": str,
-                "compliance_requirements": [str, ...],
-                "risk_assessment": str,
-                "recommendations": [str, ...],
-                "tiktok_terminology_used": bool
-              }
           - screening_analysis: dict
-          - research_analysis: dict (expected to include 'regulations' list or similar)
+          - research_analysis: dict
           - feature_name, feature_description
           - user_feedback: {"is_correct": "yes"|"no", "notes": "string"}
         """
         try:
-            # Hard requirements for this agent
             if "validation_analysis" not in state or not isinstance(state["validation_analysis"], dict):
                 raise ValueError("LearningAgent requires `validation_analysis` (new ValidationOutput schema).")
 
@@ -104,11 +88,10 @@ class LearningAgent(BaseComplianceAgent):
             }
             screening = state.get("screening_analysis", {}) or {}
             research = state.get("research_analysis", {}) or {}
-
-            decision = state["validation_analysis"]  # already in the new schema
+            decision = state["validation_analysis"]  # new schema
             user_feedback = state.get("user_feedback", {"is_correct": "yes", "notes": ""})
 
-            # Build LLM input exactly as the prompt expects
+            # Inputs to the LLM must match the variables used in build_learning_prompt
             llm_input = {
                 "feature": json.dumps(feature, ensure_ascii=False, indent=2),
                 "screening": json.dumps(screening, ensure_ascii=False, indent=2),
@@ -121,17 +104,22 @@ class LearningAgent(BaseComplianceAgent):
             if hasattr(plan, "model_dump"):
                 plan = plan.model_dump()
 
-            # Apply memory updates to Postgres
+            # ---- Apply ONLY glossary and few-shots ----
             applied_glossary: ApplyResult = self.memory.update_glossary(plan.get("glossary", []))
-            applied_kb: ApplyResult = self.memory.add_kb_snippets(plan.get("kb_snippets", []))
             applied_few: ApplyResult = self.memory.add_few_shots(plan.get("few_shots", []))
-            applied_rules: ApplyResult = self.memory.update_rules(plan.get("rules", []))
 
+            with open("app/data/glossary.jsonl", "a", encoding="utf-8") as f:
+                for g in plan.get("glossary", []):
+                    f.write(json.dumps(g, ensure_ascii=False) + "\n")
+
+            with open("app/data/fewshots.jsonl", "a", encoding="utf-8") as f:
+                for ex in plan.get("few_shots", []):
+                    f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+
+            # Explicitly ignore kb_snippets and rules (even if provided)
             applied = {
                 "glossary": applied_glossary,
-                "kb_snippets": applied_kb,
                 "few_shots": applied_few,
-                "rules": applied_rules,
             }
 
             # Optional hot-reload of prompts for running agents
@@ -187,5 +175,5 @@ class LearningAgent(BaseComplianceAgent):
     def _ensure_feedback_file(self):
         os.makedirs(os.path.dirname(self.feedback_file), exist_ok=True)
         if not os.path.exists(self.feedback_file):
-            with open(self.feedback_file, "w", encoding="utf-8"):
+            with open(self.feedback_file(), "w", encoding="utf-8"):
                 pass
