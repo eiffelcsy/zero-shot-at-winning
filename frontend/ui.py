@@ -265,85 +265,73 @@ if page == "Compliance Checker":
             
             # Get values from validation_result
             validation_result = result.get("validation_result", {})
-            final_decision = validation_result.get("final_decision", "UNKNOWN")
-            confidence_score = validation_result.get("confidence_score", 0)
+            needs_geo = validation_result.get("needs_geo_logic", "REVIEW")
+            confidence = validation_result.get("confidence", 0)
             
             with col1:
-                if final_decision == "COMPLIANT":
+                st.markdown("Does this feature need geo-specific compliance logic?")
+                if needs_geo == "YES":
                     st.error("Requires Geo-Logic")
-                elif final_decision == "NON_COMPLIANT":
+                elif needs_geo == "NO":
                     st.success("No Geo-Logic Required")
-                elif final_decision == "NEEDS_REVIEW":
+                else:  # REVIEW
                     st.warning("Needs Manual Review")
-                else:
-                    st.info("Assessment Pending")
             
             with col2:
-                st.metric("Confidence Score", f"{confidence_score:.0%}")
+                st.metric("Confidence Score", f"{confidence:.0%}")
 
             # Key findings in an expandable section
             with st.expander("Detailed Analysis", expanded=True):
                 st.markdown("### Key Findings")
                 
-                # Get reasoning from validation_result
-                reasoning = validation_result.get("reasoning", {})
+                # Get reasoning directly from validation_result
+                reasoning = validation_result.get("reasoning", "No reasoning provided")
                 
                 if reasoning:
-                    # Executive Summary
-                    st.markdown("#### Executive Summary")
-                    st.markdown(reasoning.get("executive_summary", "No executive summary provided"))
-                    
-                    # Detailed Analysis Sections
-                    sections = [
-                        ("Screening Validation", "screening_validation"),
-                        ("Research Validation", "research_validation"),
-                        ("Evidence Synthesis", "evidence_synthesis"),
-                        ("Regulatory Analysis", "regulatory_analysis"),
-                        ("Discrepancy Resolution", "discrepancy_resolution"),
-                        ("Final Assessment", "final_assessment")
-                    ]
-                    
-                    for section_title, section_key in sections:
-                        if reasoning.get(section_key):
-                            with st.expander(section_title, expanded=False):
-                                st.markdown(reasoning.get(section_key))
+                    st.markdown("#### Analysis Reasoning")
+                    st.markdown(reasoning)
+
+                # Related Regulations
+                if validation_result.get("related_regulations"):
+                    st.markdown("#### Related Regulations")
+                    for reg in validation_result["related_regulations"]:
+                        with st.expander(f"{reg['regulation_name']}", expanded=False):
+                            st.markdown(f"**Excerpt:**")
+                            st.markdown(f"_{reg['excerpt']}_")
+                            st.markdown(f"**Relevance Score:** {reg['relevance_score']:.2%}")
+                            st.markdown(f"**Source:** {reg['source_filename']}")
         
-        # Debug information in collapsed section
-        with st.expander("Technical Details", expanded=False):
-            st.markdown("### Analysis Metadata")
-            debug_info = {
-                "Analysis ID": result.get("analysis_id"),
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Feature Name": validation_result.get("feature_name"),
-                "Agent": validation_result.get("agent"),
-                "Final Decision": final_decision,
-                "Confidence Score": f"{confidence_score:.0%}"
-            }
+        # Technical details in collapsed section
+        with st.expander("Analysis Metadata", expanded=False):
+            metadata = validation_result.get("validation_metadata", {})
+            st.markdown("### Analysis Details")
             
-            # Display debug info as a table
-            debug_df = pd.DataFrame(list(debug_info.items()), columns=["Metric", "Value"])
-            st.table(debug_df)
-            
-            # Raw JSON output
-            st.markdown("### Raw JSON Response")
-            st.json(result)
+            meta_cols = st.columns(4)
+            with meta_cols[0]:
+                st.metric("Evidence Reviewed", metadata.get("evidence_pieces_reviewed", 0))
+            with meta_cols[1]:
+                st.metric("Regulations Cited", metadata.get("regulations_cited", 0))
+            with meta_cols[2]:
+                st.metric("Agent", metadata.get("agent", "Unknown"))
+            with meta_cols[3]:
+                st.metric("Timestamp", metadata.get("timestamp", "Unknown"))
 
-            # Action buttons
-            # Export options
-            export_format = st.selectbox(
-                "Export Format",
-                ["JSON", "PDF", "CSV"]
-            )
-            st.download_button(
-                f"Download as {export_format}",
-                data=json.dumps(result, indent=2),
-                file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
-                mime=f"application/{export_format.lower()}",
-                use_container_width=True
-            )
+        # Action buttons
+        # Export options
+        export_format = st.selectbox(
+            "Export Format",
+            ["JSON", "PDF", "CSV"]
+        )
+        st.download_button(
+            f"Download as {export_format}",
+            data=json.dumps(result, indent=2),
+            file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
+            mime=f"application/{export_format.lower()}",
+            use_container_width=True
+        )
 
-            if st.button("Analyze Another Feature", use_container_width=True):
-                st.rerun()
+        if st.button("Analyze Another Feature", use_container_width=True):
+            st.rerun()
     
         # Feedback Section
         st.markdown("---")
