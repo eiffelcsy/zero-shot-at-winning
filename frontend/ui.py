@@ -260,81 +260,78 @@ if page == "Compliance Checker":
             # Display key compliance findings first
             st.markdown("## Compliance Analysis Results")
             
-            # Create three columns for key metrics
-            col1, col2, col3 = st.columns(3)
+            # Create two columns for key metrics
+            col1, col2 = st.columns(2)
             
-            needs_geo = None
-            if result.get("validation_result"):
-                needs_geo = result["validation_result"].get("requires_geo_logic")
+            # Get values from validation_result
+            validation_result = result.get("validation_result", {})
+            needs_geo = validation_result.get("needs_geo_logic", "REVIEW")
+            confidence = validation_result.get("confidence", 0)
             
             with col1:
-                if needs_geo == True:
+                st.markdown("Does this feature need geo-specific compliance logic?")
+                if needs_geo == "YES":
                     st.error("Requires Geo-Logic")
-                elif needs_geo == False:
+                elif needs_geo == "NO":
                     st.success("No Geo-Logic Required")
-                else:
-                    st.warning("Assessment Pending")
+                else:  # REVIEW
+                    st.warning("Needs Manual Review")
             
             with col2:
-                confidence = result.get("confidence_score", 0)
                 st.metric("Confidence Score", f"{confidence:.0%}")
-                
-            with col3:
-                risk_level = result.get("risk_level", "UNKNOWN")
-                st.metric("Risk Level", risk_level)
 
             # Key findings in an expandable section
             with st.expander("Detailed Analysis", expanded=True):
                 st.markdown("### Key Findings")
                 
-                # Reasoning section
-                st.markdown("#### Reasoning")
-                st.markdown(result.get("reasoning", "No reasoning provided"))
+                # Get reasoning directly from validation_result
+                reasoning = validation_result.get("reasoning", "No reasoning provided")
                 
-                # Related regulations if available
-                if result.get("related_regulations"):
-                    st.markdown("#### Related Regulations")
-                    for reg in result.get("related_regulations"):
-                        st.markdown(f"- {reg}")
-            
-            # Debug information in collapsed section
-            with st.expander("Debug Information", expanded=False):
-                st.markdown("### Analysis Metadata")
-                debug_info = {
-                    "Analysis ID": result.get("analysis_id"),
-                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Model Version": result.get("model_version"),
-                    "Raw Confidence Scores": result.get("raw_scores"),
-                    "Processing Time": result.get("processing_time")
-                }
-                
-                # Display debug info as a table
-                debug_df = pd.DataFrame(list(debug_info.items()), columns=["Metric", "Value"])
-                st.table(debug_df)
-                
-                # Raw JSON output
-                st.markdown("### Raw JSON Response")
-                st.json(result)
+                if reasoning:
+                    st.markdown("#### Analysis Reasoning")
+                    st.markdown(reasoning)
 
-            # Action buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                # Export options
-                export_format = st.selectbox(
-                    "Export Format",
-                    ["JSON", "PDF", "CSV"]
-                )
-                st.download_button(
-                    f"Download as {export_format}",
-                    data=json.dumps(result, indent=2),
-                    file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
-                    mime=f"application/{export_format.lower()}",
-                    use_container_width=True
-                )
+                # Related Regulations
+                if validation_result.get("related_regulations"):
+                    st.markdown("#### Related Regulations")
+                    for reg in validation_result["related_regulations"]:
+                        with st.expander(f"{reg['regulation_name']}", expanded=False):
+                            st.markdown(f"**Excerpt:**")
+                            st.markdown(f"_{reg['excerpt']}_")
+                            st.markdown(f"**Relevance Score:** {reg['relevance_score']:.2%}")
+                            st.markdown(f"**Source:** {reg['source_filename']}")
+        
+        # Technical details in collapsed section
+        with st.expander("Analysis Metadata", expanded=False):
+            metadata = validation_result.get("validation_metadata", {})
+            st.markdown("### Analysis Details")
             
-            with col2:
-                if st.button("Analyze Another Feature", use_container_width=True):
-                    st.rerun()
+            meta_cols = st.columns(4)
+            with meta_cols[0]:
+                st.metric("Evidence Reviewed", metadata.get("evidence_pieces_reviewed", 0))
+            with meta_cols[1]:
+                st.metric("Regulations Cited", metadata.get("regulations_cited", 0))
+            with meta_cols[2]:
+                st.metric("Agent", metadata.get("agent", "Unknown"))
+            with meta_cols[3]:
+                st.metric("Timestamp", metadata.get("timestamp", "Unknown"))
+
+        # Action buttons
+        # Export options
+        export_format = st.selectbox(
+            "Export Format",
+            ["JSON", "PDF", "CSV"]
+        )
+        st.download_button(
+            f"Download as {export_format}",
+            data=json.dumps(result, indent=2),
+            file_name=f"compliance_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
+            mime=f"application/{export_format.lower()}",
+            use_container_width=True
+        )
+
+        if st.button("Analyze Another Feature", use_container_width=True):
+            st.rerun()
     
         # Feedback Section
         st.markdown("---")
@@ -541,6 +538,27 @@ elif page == "Upload Regulations":
                             st.error(f"Upload error: {str(e)}")
                 else:
                     st.error("Please complete metadata for all files before uploading")
+
+    # Supported regulations info
+    st.markdown("---")
+    st.markdown("### Currently Supported Regulations")
+    
+    regulations = [
+        {"name": "EU Digital Service Act (DSA)", "status": "Active", "coverage": "EU"},
+        {"name": "California - Protecting Our Kids from Social Media Addiction Act", "status": "Active", "coverage": "CA, US"},
+        {"name": "Florida - Online Protections for Minors", "status": "Active", "coverage": "FL, US"},
+        {"name": "Utah Social Media Regulation Act", "status": "Active", "coverage": "UT, US"},
+        {"name": "US NCMEC Reporting Requirements", "status": "Active", "coverage": "US"},
+    ]
+    
+    for reg in regulations:
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            st.write(f"**{reg['name']}**")
+        with col2:
+            st.write(reg['status'])
+        with col3:
+            st.write(reg['coverage'])
 
 # ================================================
 # Page 3: Analytics Dashboard (unchanged)
