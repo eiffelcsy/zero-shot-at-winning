@@ -57,7 +57,7 @@ streamlit run frontend/ui.py
 See docs/ARCHITECTURE.md for full details.
  
 ## Demo Video
-Watch our 3-minute demo: [YouTube Link](https://youtube.com)
+Watch our 3-minute demo: [YouTube Link](https://youtu.be/K7PVkRO0jCU)
 
 ## Focused Regulations
 - EU Digital Service Act (DSA)
