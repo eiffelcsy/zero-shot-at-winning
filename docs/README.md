@@ -34,7 +34,7 @@ Detect whether a TikTok feature needs geo-specific compliance logic based on fea
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/zero-shot-at-winning.git
+git clone https://github.com/eiffelcsy/zero-shot-at-winning.git
 cd zero-shot-at-winning
 ```
 2. Environment Setup:
